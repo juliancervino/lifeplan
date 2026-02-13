@@ -1,5 +1,4 @@
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/goal.dart';
 import '../models/frequency.dart';
 
