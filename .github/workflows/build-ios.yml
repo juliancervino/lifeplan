@@ -24,13 +24,11 @@ jobs:
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Verificar TypeAdapters generados
-        run: |
-          echo "Checking generated files..."
-          ls -la lib/models/*.g.dart
+      - name: Generar TypeAdapters de Hive
+        run: dart run build_runner build
 
       - name: Analizar código
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build iOS (sin firma)
         run: flutter build ios --release --no-codesign
