@@ -3,6 +3,9 @@ name: Build iOS
 on:
   workflow_dispatch:  # Se ejecuta manualmente desde GitHub
   push:
+    branches:
+      - main
+  push:
     tags:
       - 'v*'  # También se ejecuta al crear un tag como v1.0.0
 
