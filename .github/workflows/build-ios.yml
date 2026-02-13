@@ -1,0 +1,46 @@
+name: Build iOS
+
+on:
+  workflow_dispatch:  # Se ejecuta manualmente desde GitHub
+  push:
+    tags:
+      - 'v*'  # También se ejecuta al crear un tag como v1.0.0
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.1'
+          channel: 'stable'
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Analizar código
+        run: flutter analyze --no-fatal-infos
+
+      - name: Build iOS (sin firma)
+        run: flutter build ios --release --no-codesign
+
+      - name: Crear IPA desde build
+        run: |
+          mkdir -p build/ios/ipa
+          cd build/ios/iphoneos
+          mkdir Payload
+          cp -r Runner.app Payload/
+          zip -r ../ipa/LifePlan.ipa Payload
+
+      - name: Subir IPA como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: LifePlan-iOS
+          path: build/ios/ipa/LifePlan.ipa
+          retention-days: 30
