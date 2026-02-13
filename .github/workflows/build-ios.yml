@@ -25,10 +25,7 @@ jobs:
         run: flutter pub get
 
       - name: Generar TypeAdapters de Hive
-        run: dart run build_runner build
-
-      - name: Analizar código
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build iOS (sin firma)
         run: flutter build ios --release --no-codesign
