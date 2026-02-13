@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/database_service.dart';
 import 'providers/goal_provider.dart';
+import 'providers/settings_provider.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -73,11 +74,21 @@ class LifePlanApp extends StatelessWidget {
     // Widget de prueba simple para verificar que Flutter renderiza
     print('🎨 Construyendo LifePlanApp...');
     
-    return ChangeNotifierProvider(
-      create: (context) {
-        print('🔧 Creando GoalProvider...');
-        return GoalProvider();
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) {
+            print('🔧 Creando GoalProvider...');
+            return GoalProvider();
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (context) {
+            print('🔧 Creando SettingsProvider...');
+            return SettingsProvider();
+          },
+        ),
+      ],
       child: MaterialApp(
         title: 'LifePlan',
         debugShowCheckedModeBanner: false,

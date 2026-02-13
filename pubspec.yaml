@@ -19,6 +19,10 @@ dependencies:
   fl_chart: ^0.66.0
   screenshot: ^3.0.0
   share_plus: ^10.1.2
+  google_sign_in: ^6.2.1
+  googleapis: ^13.2.0
+  http: ^1.2.1
+  flutter_secure_storage: ^9.2.3
 
 dev_dependencies:
   flutter_test:
@@ -26,6 +30,14 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   hive_generator: ^2.0.1
   build_runner: ^2.4.7
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#673AB7"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
 
 flutter:
   uses-material-design: true

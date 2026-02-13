@@ -6,6 +6,7 @@ import '../models/frequency.dart';
 import '../providers/goal_provider.dart';
 import 'add_goal_screen.dart';
 import 'stats_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -43,9 +44,24 @@ class HomeScreen extends StatelessWidget {
             onSelected: (value) {
               if (value == 'about') {
                 _showAboutAppDialog(context);
+              } else if (value == 'settings') {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                );
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'settings',
+                child: ListTile(
+                  leading: Icon(Icons.settings),
+                  title: Text('Configuración'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
               const PopupMenuItem(
                 value: 'about',
                 child: ListTile(
