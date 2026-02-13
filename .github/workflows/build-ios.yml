@@ -24,8 +24,10 @@ jobs:
       - name: Instalar dependencias
         run: flutter pub get
 
-      - name: Generar TypeAdapters
-        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Verificar TypeAdapters generados
+        run: |
+          echo "Checking generated files..."
+          ls -la lib/models/*.g.dart
 
       - name: Analizar código
         run: flutter analyze --no-fatal-infos
