@@ -96,17 +96,27 @@ class HomeScreen extends StatelessWidget {
             children: [
               _buildStatsHeader(goalProvider),
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () => goalProvider.loadGoals(),
-                  child: ListView.builder(
+                child: ReorderableListView.builder(
                     padding: const EdgeInsets.all(8.0),
                     itemCount: goalProvider.goals.length,
+                    onReorder: (oldIndex, newIndex) {
+                      goalProvider.reorderGoals(oldIndex, newIndex);
+                    },
+                    proxyDecorator: (child, index, animation) {
+                      return Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(12),
+                        child: child,
+                      );
+                    },
                     itemBuilder: (context, index) {
                       final goal = goalProvider.goals[index];
-                      return _buildGoalCard(context, goal, goalProvider);
+                      return _buildGoalCard(
+                        context, goal, goalProvider,
+                        key: ValueKey(goal.id),
+                      );
                     },
                   ),
-                ),
               ),
             ],
           );
@@ -253,13 +263,15 @@ class HomeScreen extends StatelessWidget {
   Widget _buildGoalCard(
     BuildContext context,
     Goal goal,
-    GoalProvider goalProvider,
-  ) {
+    GoalProvider goalProvider, {
+    Key? key,
+  }) {
     final isCompletedToday = goal.isCompletedForPeriod(DateTime.now());
     final completionRate = goal.getCompletionRate();
     final currentStreak = goal.getCurrentStreak();
 
     return Card(
+      key: key,
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
       elevation: 2,
       child: InkWell(
@@ -517,6 +529,14 @@ class HomeScreen extends StatelessWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Editar nombre'),
+              onTap: () {
+                Navigator.pop(context);
+                _showEditGoalDialog(context, goal, goalProvider);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),
               title: const Text(
                 'Eliminar objetivo',
@@ -529,6 +549,49 @@ class HomeScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditGoalDialog(
+    BuildContext context,
+    Goal goal,
+    GoalProvider goalProvider,
+  ) {
+    final controller = TextEditingController(text: goal.title);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar nombre'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Nombre del objetivo',
+            border: OutlineInputBorder(),
+          ),
+          textCapitalization: TextCapitalization.sentences,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              final newTitle = controller.text.trim();
+              if (newTitle.isNotEmpty && newTitle != goal.title) {
+                goalProvider.renameGoal(goal, newTitle);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Nombre actualizado')),
+                );
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
       ),
     );
   }

@@ -23,6 +23,9 @@ class Goal extends HiveObject {
   @HiveField(5)
   Map<String, bool> records; // Map de fecha (YYYY-MM-DD) a cumplimiento (true/false)
 
+  @HiveField(6)
+  int orderIndex;
+
   Goal({
     required this.id,
     required this.title,
@@ -30,6 +33,7 @@ class Goal extends HiveObject {
     required this.frequency,
     required this.createdDate,
     Map<String, bool>? records,
+    this.orderIndex = 0,
   }) : records = records ?? {};
 
   /// Marca el objetivo como cumplido para una fecha específica
@@ -139,6 +143,7 @@ class Goal extends HiveObject {
     Frequency? frequency,
     DateTime? createdDate,
     Map<String, bool>? records,
+    int? orderIndex,
   }) {
     return Goal(
       id: id ?? this.id,
@@ -147,6 +152,7 @@ class Goal extends HiveObject {
       frequency: frequency ?? this.frequency,
       createdDate: createdDate ?? this.createdDate,
       records: records ?? Map.from(this.records),
+      orderIndex: orderIndex ?? this.orderIndex,
     );
   }
 }

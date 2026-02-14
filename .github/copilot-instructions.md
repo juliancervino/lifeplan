@@ -30,21 +30,29 @@ Cross-platform mobile app (iOS & Android) for habit and goal tracking with offli
 
 ## Estructura del Proyecto
 ```
-lib/
-├── models/
-│   ├── frequency.dart        # Enum de frecuencias con TypeAdapter
-│   ├── frequency.g.dart      # TypeAdapter generado
-│   ├── goal.dart            # Modelo principal con métodos
-│   └── goal.g.dart          # TypeAdapter generado
-├── services/
-│   └── database_service.dart # Servicio de base de datos Hive
-├── providers/
-│   └── goal_provider.dart   # Gestión de estado con Provider
-├── screens/
-│   ├── home_screen.dart     # Pantalla principal con lista
-│   └── add_goal_screen.dart # Formulario para crear objetivos
-├── database_example.dart     # Ejemplos de uso
-└── main.dart                # Punto de entrada
+lifeplan/
+├── android/                    # Configuración nativa Android (Gradle, Manifest)
+├── ios/                        # Configuración nativa iOS (Xcode)
+├── web/                        # Shell HTML para versión web
+├── lib/                        # ── Código fuente principal ──
+│   ├── main.dart               # Punto de entrada de la aplicación
+│   ├── models/
+│   │   ├── goal.dart           # Modelo Goal (título, categoría, frecuencia, records)
+│   │   ├── goal.g.dart         # TypeAdapter generado para Hive
+│   │   ├── frequency.dart      # Enum Frequency (daily, weekly, monthly, yearly)
+│   │   └── frequency.g.dart    # TypeAdapter generado para Hive
+│   ├── services/
+│   │   ├── database_service.dart  # CRUD con Hive (init, add, update, delete)
+│   │   └── stats_service.dart     # Cálculos: Life Score, tendencias, rachas, categorías
+│   ├── providers/
+│   │   └── goal_provider.dart  # Estado global con ChangeNotifier + Provider
+│   └── screens/
+│       ├── home_screen.dart    # Pantalla principal: lista de objetivos con checkboxes
+│       ├── add_goal_screen.dart # Formulario de creación de objetivos
+│       └── stats_screen.dart   # Dashboard: gráficos, Life Score, compartir imagen
+├── test/                       # Tests unitarios y de widgets
+├── pubspec.yaml                # Dependencias y configuración del proyecto
+└── README.md
 ```
 
 ## Comandos Útiles

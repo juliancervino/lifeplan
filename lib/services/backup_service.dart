@@ -178,6 +178,7 @@ class BackupService {
       'frequency': goal.frequency.index,
       'createdDate': goal.createdDate.toIso8601String(),
       'records': goal.records.map((key, value) => MapEntry(key, value)),
+      'orderIndex': goal.orderIndex,
     }).toList();
 
     final backup = {
@@ -199,7 +200,8 @@ class BackupService {
     await DatabaseService.clearAllData();
 
     // Importar cada goal
-    for (final goalJson in goalsData) {
+    for (var index = 0; index < goalsData.length; index++) {
+      final goalJson = goalsData[index];
       final records = <String, bool>{};
       if (goalJson['records'] != null) {
         (goalJson['records'] as Map<String, dynamic>).forEach((key, value) {
@@ -214,6 +216,7 @@ class BackupService {
         frequency: Frequency.values[goalJson['frequency'] as int],
         createdDate: DateTime.parse(goalJson['createdDate'] as String),
         records: records,
+        orderIndex: (goalJson['orderIndex'] as int?) ?? index,
       );
 
       await DatabaseService.addGoal(goal);

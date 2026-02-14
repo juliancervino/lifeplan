@@ -23,13 +23,14 @@ class GoalAdapter extends TypeAdapter<Goal> {
       frequency: fields[3] as Frequency,
       createdDate: fields[4] as DateTime,
       records: (fields[5] as Map?)?.cast<String, bool>(),
+      orderIndex: fields[6] as int? ?? 0,
     );
   }
 
   @override
   void write(BinaryWriter writer, Goal obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class GoalAdapter extends TypeAdapter<Goal> {
       ..writeByte(4)
       ..write(obj.createdDate)
       ..writeByte(5)
-      ..write(obj.records);
+      ..write(obj.records)
+      ..writeByte(6)
+      ..write(obj.orderIndex);
   }
 
   @override

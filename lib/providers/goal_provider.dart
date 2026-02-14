@@ -24,8 +24,15 @@ class GoalProvider with ChangeNotifier {
 
     try {
       _goals = DatabaseService.getAllGoals();
-      // Ordenar por fecha de creación (más recientes primero)
-      _goals.sort((a, b) => b.createdDate.compareTo(a.createdDate));
+      // Ordenar por orderIndex, luego por fecha de creación como fallback
+      _goals.sort((a, b) {
+        if (a.orderIndex != b.orderIndex) {
+          return a.orderIndex.compareTo(b.orderIndex);
+        }
+        return b.createdDate.compareTo(a.createdDate);
+      });
+      // Asignar orderIndex a goals antiguos que tengan todos 0
+      _assignOrderIndexIfNeeded();
       debugPrint('✅ Cargados ${_goals.length} objetivos');
     } catch (e) {
       debugPrint('❌ Error cargando objetivos: $e');
@@ -36,9 +43,25 @@ class GoalProvider with ChangeNotifier {
     }
   }
 
+  /// Asigna orderIndex incremental a goals que aún no lo tienen
+  void _assignOrderIndexIfNeeded() {
+    if (_goals.length > 1 && _goals.every((g) => g.orderIndex == 0)) {
+      for (var i = 0; i < _goals.length; i++) {
+        _goals[i].orderIndex = i;
+        _goals[i].save();
+      }
+    }
+  }
+
   /// Agrega un nuevo objetivo
   Future<void> addGoal(Goal goal) async {
     try {
+      // Asignar orderIndex 0 (se inserta al inicio) y desplazar los demás
+      goal.orderIndex = 0;
+      for (var g in _goals) {
+        g.orderIndex++;
+        g.save();
+      }
       await DatabaseService.addGoal(goal);
       _goals.insert(0, goal); // Agregar al inicio de la lista
       notifyListeners();
@@ -61,6 +84,29 @@ class GoalProvider with ChangeNotifier {
       debugPrint('Error actualizando objetivo: $e');
       rethrow;
     }
+  }
+
+  /// Renombra un objetivo
+  Future<void> renameGoal(Goal goal, String newTitle) async {
+    goal.title = newTitle;
+    goal.save();
+    notifyListeners();
+  }
+
+  /// Reordena los objetivos tras un drag & drop
+  void reorderGoals(int oldIndex, int newIndex) {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final item = _goals.removeAt(oldIndex);
+    _goals.insert(newIndex, item);
+
+    // Actualizar orderIndex en todos
+    for (var i = 0; i < _goals.length; i++) {
+      _goals[i].orderIndex = i;
+      _goals[i].save();
+    }
+    notifyListeners();
   }
 
   /// Elimina un objetivo
@@ -99,8 +145,6 @@ class GoalProvider with ChangeNotifier {
   /// Obtiene objetivos que deben completarse hoy
   List<Goal> getTodaysGoals() {
     return _goals.where((goal) {
-      // Por ahora, solo mostramos los diarios
-      // TODO: Implementar lógica para semanales, mensuales, anuales
       return goal.frequency == Frequency.daily;
     }).toList();
   }

@@ -2,10 +2,14 @@ import '../models/goal.dart';
 import '../models/frequency.dart';
 
 class StatsService {
+  /// Normaliza una fecha a medianoche (00:00:00) para evitar problemas de comparación
+  static DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
+
   /// Calcula el porcentaje de cumplimiento de un objetivo basado en su frecuencia
   /// y los días que deberían haberse cumplido en un periodo
   static double calculateCompletionPercentage(Goal goal, {int days = 30}) {
-    final now = DateTime.now();
+    final now = _normalizeDate(DateTime.now());
+    final createdNorm = _normalizeDate(goal.createdDate);
     final startDate = now.subtract(Duration(days: days));
     
     // Obtener días esperados según la frecuencia
@@ -13,7 +17,7 @@ class StatsService {
       goal.frequency, 
       startDate, 
       now,
-      goal.createdDate,
+      createdNorm,
     );
     
     if (expectedDays == 0) return 0.0;
@@ -22,7 +26,7 @@ class StatsService {
     int completedDays = 0;
     for (var i = 0; i < days; i++) {
       final checkDate = now.subtract(Duration(days: i));
-      if (checkDate.isBefore(goal.createdDate)) break;
+      if (checkDate.isBefore(createdNorm)) break;
       
       if (goal.isCompletedOn(checkDate)) {
         completedDays++;
@@ -78,7 +82,8 @@ class StatsService {
     Goal goal, {
     int points = 30,
   }) {
-    final now = DateTime.now();
+    final now = _normalizeDate(DateTime.now());
+    final createdNorm = _normalizeDate(goal.createdDate);
     final dataPoints = <CompletionDataPoint>[];
     
     // Determinar si usar días o semanas según la frecuencia
@@ -100,7 +105,7 @@ class StatsService {
         for (var d = 0; d < 7; d++) {
           final checkDate = date.add(Duration(days: d));
           if (checkDate.isAfter(now)) break;
-          if (checkDate.isBefore(goal.createdDate)) continue;
+          if (checkDate.isBefore(createdNorm)) continue;
           
           expectedInWeek++;
           if (goal.isCompletedOn(checkDate)) {
@@ -112,8 +117,8 @@ class StatsService {
             ? (completedInWeek / expectedInWeek) * 100 
             : 0.0;
       } else {
-        // Para días, revisar si está completado
-        if (date.isAfter(goal.createdDate) && !date.isAfter(now)) {
+        // Para días, revisar si está completado (incluye el día de creación)
+        if (!date.isBefore(createdNorm) && !date.isAfter(now)) {
           completionRate = goal.isCompletedOn(date) ? 100.0 : 0.0;
         }
       }
@@ -172,8 +177,8 @@ class StatsService {
   
   /// Obtiene estadísticas generales de un objetivo
   static GoalStats getGoalStats(Goal goal) {
-    final now = DateTime.now();
-    final daysActive = now.difference(goal.createdDate).inDays + 1;
+    final now = _normalizeDate(DateTime.now());
+    final daysActive = now.difference(_normalizeDate(goal.createdDate)).inDays + 1;
     
     // Calcular cumplimiento total
     final totalRecords = goal.records.length;
