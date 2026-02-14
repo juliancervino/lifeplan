@@ -24,7 +24,9 @@ class _StatsScreenState extends State<StatsScreen> {
   Goal? _selectedGoal;
   int _trendDays = 30;
   final ScreenshotController _screenshotController = ScreenshotController();
+  final ScreenshotController _trendScreenshotController = ScreenshotController();
   bool _isSharing = false;
+  bool _isSharingTrend = false;
   
   @override
   void initState() {
@@ -73,6 +75,10 @@ class _StatsScreenState extends State<StatsScreen> {
                 _buildLifeScoreCard(goals),
                 const SizedBox(height: 24),
                 
+                // Tendencia de cumplimiento diario (global)
+                _buildDailyTrendChart(goals),
+                const SizedBox(height: 24),
+
                 // Selector de objetivo para detalles
                 _buildGoalSelector(goals),
                 const SizedBox(height: 24),
@@ -80,8 +86,6 @@ class _StatsScreenState extends State<StatsScreen> {
                 // Si hay un objetivo seleccionado, mostrar sus stats
                 if (_selectedGoal != null) ...[
                   _buildGoalDetailsCard(_selectedGoal!),
-                  const SizedBox(height: 24),
-                  _buildTrendChart(_selectedGoal!),
                   const SizedBox(height: 24),
                 ],
                 
@@ -180,7 +184,7 @@ class _StatsScreenState extends State<StatsScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Tres tarjetas de frecuencia
+              // Tarjetas de frecuencia (2x2 grid)
               Row(
                 children: [
                   Expanded(
@@ -189,6 +193,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       label: 'Diarios',
                       score: scores.dailyScore,
                       count: scores.dailyCount,
+                      period: '30 días',
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -198,22 +203,38 @@ class _StatsScreenState extends State<StatsScreen> {
                       label: 'Semanales',
                       score: scores.weeklyScore,
                       count: scores.weeklyCount,
+                      period: '8 sem.',
                     ),
                   ),
-                  const SizedBox(width: 10),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
                   Expanded(
                     child: _buildFrequencyScoreTile(
                       emoji: '🗓️',
                       label: 'Mensuales',
                       score: scores.monthlyScore,
                       count: scores.monthlyCount,
+                      period: '6 meses',
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildFrequencyScoreTile(
+                      emoji: '🌟',
+                      label: 'Anuales',
+                      score: scores.yearlyScore,
+                      count: scores.yearlyCount,
+                      period: '1 año',
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               Text(
-                'Basado en ${scores.totalCount} ${scores.totalCount == 1 ? 'objetivo' : 'objetivos'} · Últimos 30 días',
+                'Basado en ${scores.totalCount} ${scores.totalCount == 1 ? 'objetivo' : 'objetivos'}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[500]),
               ),
             ],
@@ -228,24 +249,25 @@ class _StatsScreenState extends State<StatsScreen> {
     required String label,
     required double score,
     required int count,
+    required String period,
   }) {
-    final color = _getScoreColor(score);
+    final color = count > 0 ? _getScoreColor(score) : Colors.grey;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withAlpha(25),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withAlpha(75)),
       ),
       child: Column(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
-          const SizedBox(height: 6),
+          Text(emoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(height: 4),
           Text(
-            count > 0 ? score.toStringAsFixed(0) : '—',
+            count > 0 ? '${score.toStringAsFixed(0)}%' : '—',
             style: TextStyle(
-              fontSize: 28,
+              fontSize: 26,
               fontWeight: FontWeight.bold,
               color: count > 0 ? color : Colors.grey,
             ),
@@ -256,8 +278,8 @@ class _StatsScreenState extends State<StatsScreen> {
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           ),
           Text(
-            '$count obj.',
-            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            '$count obj. · $period',
+            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
           ),
         ],
       ),
@@ -445,25 +467,36 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
   
-  Widget _buildTrendChart(Goal goal) {
-    final trendData = StatsService.getTrendData(goal, points: _trendDays);
-    
+  Widget _buildDailyTrendChart(List<Goal> goals) {
+    final dailyGoals = goals.where((g) => g.frequency == Frequency.daily).toList();
+
+    if (dailyGoals.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final trendData = StatsService.getDailyTrendData(goals, days: _trendDays);
+
     if (trendData.isEmpty) {
       return const SizedBox.shrink();
     }
-    
+
     final spots = trendData.asMap().entries.map((entry) {
       return FlSpot(entry.key.toDouble(), entry.value.completionRate);
     }).toList();
-    
-    return Card(
+
+    // Calcular promedio del periodo
+    final avgRate = trendData.map((d) => d.completionRate).reduce((a, b) => a + b) / trendData.length;
+
+    return Screenshot(
+      controller: _trendScreenshotController,
+      child: Card(
+        color: Colors.white,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Expanded(
                     child: Text(
@@ -474,154 +507,218 @@ class _StatsScreenState extends State<StatsScreen> {
                       ),
                     ),
                   ),
+                  IconButton(
+                    icon: _isSharingTrend
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.share, size: 20),
+                    onPressed: _isSharingTrend ? null : () => _shareTrendChart(goals),
+                    tooltip: 'Compartir gráfico',
+                  ),
                   DropdownButton<int>(
-                  value: _trendDays,
-                  underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(value: 7, child: Text('7d')),
-                    DropdownMenuItem(value: 14, child: Text('14d')),
-                    DropdownMenuItem(value: 30, child: Text('30d')),
-                    DropdownMenuItem(value: 60, child: Text('60d')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _trendDays = value;
-                      });
-                    }
-                  },
-                ),
+                    value: _trendDays,
+                    underline: const SizedBox(),
+                    items: const [
+                      DropdownMenuItem(value: 7, child: Text('7d')),
+                      DropdownMenuItem(value: 14, child: Text('14d')),
+                      DropdownMenuItem(value: 30, child: Text('30d')),
+                      DropdownMenuItem(value: 60, child: Text('60d')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _trendDays = value;
+                        });
+                      }
+                    },
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
-                goal.title,
+                '${dailyGoals.length} objetivos diarios · Promedio: ${avgRate.toStringAsFixed(0)}%',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   color: Colors.grey[600],
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: LineChart(
-                LineChartData(
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: 25,
-                    getDrawingHorizontalLine: (value) {
-                      return FlLine(
-                        color: Colors.grey[300]!,
-                        strokeWidth: 1,
-                      );
-                    },
-                  ),
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            '${value.toInt()}%',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[600],
-                            ),
-                          );
-                        },
-                      ),
+              SizedBox(
+                height: 200,
+                child: LineChart(
+                  LineChartData(
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      horizontalInterval: 25,
+                      getDrawingHorizontalLine: (value) {
+                        return FlLine(
+                          color: Colors.grey[300]!,
+                          strokeWidth: 1,
+                        );
+                      },
                     ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        interval: (_trendDays / 5).floorToDouble(),
-                        getTitlesWidget: (value, meta) {
-                          if (value.toInt() >= trendData.length) {
-                            return const SizedBox();
-                          }
-                          final date = trendData[value.toInt()].date;
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              DateFormat('d/M').format(date),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 40,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              '${value.toInt()}%',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.grey[600],
                               ),
-                            ),
-                          );
+                            );
+                          },
+                        ),
+                      ),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: (_trendDays / 5).floorToDouble().clamp(1, double.infinity),
+                          getTitlesWidget: (value, meta) {
+                            final idx = value.toInt();
+                            if (idx < 0 || idx >= trendData.length) {
+                              return const SizedBox();
+                            }
+                            final date = trendData[idx].date;
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                DateFormat('d/M').format(date),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    borderData: FlBorderData(
+                      show: true,
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey[300]!),
+                        left: BorderSide(color: Colors.grey[300]!),
+                      ),
+                    ),
+                    minX: 0,
+                    maxX: (trendData.length - 1).toDouble(),
+                    minY: 0,
+                    maxY: 100,
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        color: Colors.blue,
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        dotData: FlDotData(
+                          show: spots.length <= 30,
+                          getDotPainter: (spot, percent, barData, index) {
+                            return FlDotCirclePainter(
+                              radius: 3,
+                              color: Colors.blue,
+                              strokeWidth: 0,
+                            );
+                          },
+                        ),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: Colors.blue.withAlpha(25),
+                        ),
+                      ),
+                    ],
+                    lineTouchData: LineTouchData(
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipItems: (touchedSpots) {
+                          return touchedSpots.map((spot) {
+                            final idx = spot.x.toInt().clamp(0, trendData.length - 1);
+                            final date = trendData[idx].date;
+                            return LineTooltipItem(
+                              '${DateFormat('d MMM').format(date)}\n${spot.y.toStringAsFixed(0)}%',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          }).toList();
                         },
                       ),
-                    ),
-                  ),
-                  borderData: FlBorderData(
-                    show: true,
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey[300]!),
-                      left: BorderSide(color: Colors.grey[300]!),
-                    ),
-                  ),
-                  minX: 0,
-                  maxX: (trendData.length - 1).toDouble(),
-                  minY: 0,
-                  maxY: 100,
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: true,
-                      color: Colors.blue,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: FlDotData(
-                        show: spots.length <= 30,
-                        getDotPainter: (spot, percent, barData, index) {
-                          return FlDotCirclePainter(
-                            radius: 3,
-                            color: Colors.blue,
-                            strokeWidth: 0,
-                          );
-                        },
-                      ),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: Colors.blue.withOpacity(0.1),
-                      ),
-                    ),
-                  ],
-                  lineTouchData: LineTouchData(
-                    touchTooltipData: LineTouchTooltipData(
-                      getTooltipItems: (touchedSpots) {
-                        return touchedSpots.map((spot) {
-                          final date = trendData[spot.x.toInt()].date;
-                          return LineTooltipItem(
-                            '${DateFormat('d MMM').format(date)}\n${spot.y.toStringAsFixed(0)}%',
-                            const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          );
-                        }).toList();
-                      },
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
-  
+
+  Future<void> _shareTrendChart(List<Goal> goals) async {
+    setState(() {
+      _isSharingTrend = true;
+    });
+
+    try {
+      final image = await _trendScreenshotController.capture(pixelRatio: 2.0);
+      if (image == null) throw Exception('No se pudo capturar la imagen');
+
+      final directory = await getTemporaryDirectory();
+      final imagePath = '${directory.path}/lifeplan_trend_${DateTime.now().millisecondsSinceEpoch}.png';
+      final imageFile = File(imagePath);
+      await imageFile.writeAsBytes(image);
+
+      final dailyGoals = goals.where((g) => g.frequency == Frequency.daily).toList();
+      final trendData = StatsService.getDailyTrendData(goals, days: _trendDays);
+      final avgRate = trendData.isNotEmpty
+          ? trendData.map((d) => d.completionRate).reduce((a, b) => a + b) / trendData.length
+          : 0.0;
+
+      final message = '''📊 Mi Tendencia de Cumplimiento — Últimos $_trendDays días
+
+📅 ${dailyGoals.length} objetivos diarios
+📈 Promedio: ${avgRate.toStringAsFixed(0)}%
+
+¡Sigue tu progreso con LifePlan!''';
+
+      await Share.shareXFiles(
+        [XFile(imagePath)],
+        text: message,
+        subject: 'Mi Tendencia — LifePlan',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al compartir: \$e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSharingTrend = false;
+        });
+      }
+    }
+  }
+
   /// Captura el bloque de Puntuación de Vida y lo comparte
   Future<void> _shareLifeScore() async {
     setState(() {
@@ -648,20 +745,23 @@ class _StatsScreenState extends State<StatsScreen> {
       
       final parts = <String>[];
       if (scores.dailyCount > 0) {
-        parts.add('📅 Diarios: ${scores.dailyScore.toStringAsFixed(0)}%');
+        parts.add('📅 Diarios (${scores.dailyCount}): ${scores.dailyScore.toStringAsFixed(0)}%');
       }
       if (scores.weeklyCount > 0) {
-        parts.add('📆 Semanales: ${scores.weeklyScore.toStringAsFixed(0)}%');
+        parts.add('📆 Semanales (${scores.weeklyCount}): ${scores.weeklyScore.toStringAsFixed(0)}%');
       }
       if (scores.monthlyCount > 0) {
-        parts.add('🗓️ Mensuales: ${scores.monthlyScore.toStringAsFixed(0)}%');
+        parts.add('🗓️ Mensuales (${scores.monthlyCount}): ${scores.monthlyScore.toStringAsFixed(0)}%');
+      }
+      if (scores.yearlyCount > 0) {
+        parts.add('🌟 Anuales (${scores.yearlyCount}): ${scores.yearlyScore.toStringAsFixed(0)}%');
       }
       
       final message = '''🏆 Mi Puntuación de Vida: ${scores.overallScore.toStringAsFixed(0)}/100
 
 ${parts.join('\n')}
 
-📊 ${scores.totalCount} objetivos · Últimos 30 días
+📊 ${scores.totalCount} objetivos
 ¡Sigue tu progreso con LifePlan!''';
       
       await Share.shareXFiles(

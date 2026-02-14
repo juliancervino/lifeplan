@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../models/goal.dart';
 import '../models/frequency.dart';
 import '../providers/goal_provider.dart';
@@ -8,13 +9,59 @@ import 'add_goal_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late DateTime _selectedDate;
+  bool _isCalendarVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = _normalizeDate(DateTime.now());
+  }
+
+  DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  bool get _isToday => isSameDay(_selectedDate, _normalizeDate(DateTime.now()));
+
+  String _formatSelectedDate() {
+    final now = _normalizeDate(DateTime.now());
+    final yesterday = now.subtract(const Duration(days: 1));
+
+    if (isSameDay(_selectedDate, now)) return 'Hoy';
+    if (isSameDay(_selectedDate, yesterday)) return 'Ayer';
+    return DateFormat('d MMM yyyy', 'es').format(_selectedDate);
+  }
+
+  void _goToPreviousDay() {
+    setState(() {
+      _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+    });
+  }
+
+  void _goToNextDay() {
+    if (!_isToday) {
+      setState(() {
+        _selectedDate = _selectedDate.add(const Duration(days: 1));
+      });
+    }
+  }
+
+  void _goToToday() {
+    setState(() {
+      _selectedDate = _normalizeDate(DateTime.now());
+      _isCalendarVisible = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    print('🏗️ Construyendo HomeScreen widget...');
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('LifePlan'),
@@ -35,7 +82,6 @@ class HomeScreen extends StatelessWidget {
             icon: const Icon(Icons.refresh),
             tooltip: 'Recargar',
             onPressed: () {
-              print('🔄 Recargando objetivos...');
               context.read<GoalProvider>().loadGoals();
             },
           ),
@@ -77,46 +123,45 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Consumer<GoalProvider>(
         builder: (context, goalProvider, child) {
-          print('📊 Consumer builder ejecutándose... isLoading: ${goalProvider.isLoading}, goals: ${goalProvider.goals.length}');
-          
           if (goalProvider.isLoading) {
-            print('⏳ Mostrando loading...');
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (goalProvider.goals.isEmpty) {
-            print('📭 Mostrando empty state...');
             return _buildEmptyState(context);
           }
 
-          print('📋 Mostrando lista de ${goalProvider.goals.length} objetivos...');
           return Column(
             children: [
+              // Barra de navegación de fecha
+              _buildDateNavigationBar(),
+              // Calendario expandible
+              _buildCalendarView(goalProvider),
+              // Cabecera de estadísticas
               _buildStatsHeader(goalProvider),
+              // Lista de objetivos
               Expanded(
                 child: ReorderableListView.builder(
-                    padding: const EdgeInsets.all(8.0),
-                    itemCount: goalProvider.goals.length,
-                    onReorder: (oldIndex, newIndex) {
-                      goalProvider.reorderGoals(oldIndex, newIndex);
-                    },
-                    proxyDecorator: (child, index, animation) {
-                      return Material(
-                        elevation: 4,
-                        borderRadius: BorderRadius.circular(12),
-                        child: child,
-                      );
-                    },
-                    itemBuilder: (context, index) {
-                      final goal = goalProvider.goals[index];
-                      return _buildGoalCard(
-                        context, goal, goalProvider,
-                        key: ValueKey(goal.id),
-                      );
-                    },
-                  ),
+                  padding: const EdgeInsets.all(8.0),
+                  itemCount: goalProvider.goals.length,
+                  onReorder: (oldIndex, newIndex) {
+                    goalProvider.reorderGoals(oldIndex, newIndex);
+                  },
+                  proxyDecorator: (child, index, animation) {
+                    return Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(12),
+                      child: child,
+                    );
+                  },
+                  itemBuilder: (context, index) {
+                    final goal = goalProvider.goals[index];
+                    return _buildGoalCard(
+                      context, goal, goalProvider,
+                      key: ValueKey(goal.id),
+                    );
+                  },
+                ),
               ),
             ],
           );
@@ -124,7 +169,6 @@ class HomeScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          print('➕ Navegando a AddGoalScreen...');
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -137,6 +181,253 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+
+  // ─── Date Navigation Bar ─────────────────────────────────────
+
+  Widget _buildDateNavigationBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.shade50,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade200),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Flecha izquierda
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 28),
+            onPressed: _goToPreviousDay,
+            tooltip: 'Día anterior',
+          ),
+          // Fecha (tap para abrir calendario)
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _isCalendarVisible = !_isCalendarVisible;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: _isCalendarVisible
+                    ? Colors.deepPurple.shade100
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _isCalendarVisible
+                        ? Icons.calendar_month
+                        : Icons.calendar_today,
+                    size: 18,
+                    color: Colors.deepPurple,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _formatSelectedDate(),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.deepPurple.shade800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Flecha derecha (deshabilitada si es hoy)
+          IconButton(
+            icon: Icon(
+              Icons.chevron_right,
+              size: 28,
+              color: _isToday ? Colors.grey.shade300 : null,
+            ),
+            onPressed: _isToday ? null : _goToNextDay,
+            tooltip: 'Día siguiente',
+          ),
+          // Botón "Hoy" (visible solo si no estamos en hoy)
+          if (!_isToday)
+            TextButton.icon(
+              onPressed: _goToToday,
+              icon: const Icon(Icons.today, size: 16),
+              label: const Text('Hoy', style: TextStyle(fontSize: 13)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Calendar View ───────────────────────────────────────────
+
+  Widget _buildCalendarView(GoalProvider goalProvider) {
+    return AnimatedCrossFade(
+      firstChild: const SizedBox.shrink(),
+      secondChild: _buildCalendarBody(goalProvider),
+      crossFadeState: _isCalendarVisible
+          ? CrossFadeState.showSecond
+          : CrossFadeState.showFirst,
+      duration: const Duration(milliseconds: 250),
+    );
+  }
+
+  Widget _buildCalendarBody(GoalProvider goalProvider) {
+    final now = _normalizeDate(DateTime.now());
+    final earliestGoal = goalProvider.getEarliestCreatedDate();
+    final earliest = earliestGoal != null
+        ? _normalizeDate(earliestGoal).subtract(const Duration(days: 365))
+        : now.subtract(const Duration(days: 730));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade300),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(15),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TableCalendar(
+        locale: 'es',
+        firstDay: earliest,
+        lastDay: now,
+        focusedDay: _selectedDate.isAfter(now) ? now : _selectedDate,
+        selectedDayPredicate: (day) => isSameDay(day, _selectedDate),
+        startingDayOfWeek: StartingDayOfWeek.monday,
+        calendarFormat: CalendarFormat.month,
+        availableCalendarFormats: const {CalendarFormat.month: 'Mes'},
+        headerStyle: HeaderStyle(
+          formatButtonVisible: false,
+          titleCentered: true,
+          titleTextStyle: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.deepPurple.shade800,
+          ),
+          leftChevronIcon: Icon(
+            Icons.chevron_left,
+            color: Colors.deepPurple.shade600,
+          ),
+          rightChevronIcon: Icon(
+            Icons.chevron_right,
+            color: Colors.deepPurple.shade600,
+          ),
+        ),
+        daysOfWeekStyle: DaysOfWeekStyle(
+          weekdayStyle: TextStyle(
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+            fontSize: 12,
+          ),
+          weekendStyle: TextStyle(
+            color: Colors.grey.shade500,
+            fontWeight: FontWeight.w500,
+            fontSize: 12,
+          ),
+        ),
+        calendarStyle: const CalendarStyle(
+          outsideDaysVisible: false,
+          todayDecoration: BoxDecoration(
+            shape: BoxShape.circle,
+          ),
+          selectedDecoration: BoxDecoration(
+            shape: BoxShape.circle,
+          ),
+        ),
+        onDaySelected: (selectedDay, focusedDay) {
+          setState(() {
+            _selectedDate = _normalizeDate(selectedDay);
+            _isCalendarVisible = false;
+          });
+        },
+        calendarBuilders: CalendarBuilders(
+          defaultBuilder: (context, day, focusedDay) {
+            return _buildCalendarDayCell(day, goalProvider, isSelected: false);
+          },
+          todayBuilder: (context, day, focusedDay) {
+            return _buildCalendarDayCell(
+              day,
+              goalProvider,
+              isSelected: isSameDay(day, _selectedDate),
+              isToday: true,
+            );
+          },
+          selectedBuilder: (context, day, focusedDay) {
+            return _buildCalendarDayCell(
+              day,
+              goalProvider,
+              isSelected: true,
+              isToday: isSameDay(day, _normalizeDate(DateTime.now())),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendarDayCell(
+    DateTime day,
+    GoalProvider goalProvider, {
+    bool isSelected = false,
+    bool isToday = false,
+  }) {
+    final ratio = goalProvider.getDailyGoalCompletionRatio(day);
+
+    Color? bgColor;
+    Color textColor = Colors.black87;
+
+    if (ratio >= 0) {
+      // Hay goals diarios → colorear según ratio
+      bgColor = Color.lerp(
+        Colors.red.shade300,
+        Colors.green.shade400,
+        ratio,
+      )!.withAlpha((80 + (ratio * 120)).toInt());
+    }
+
+    if (isSelected) {
+      bgColor = Colors.deepPurple;
+      textColor = Colors.white;
+    } else if (isToday) {
+      textColor = Colors.deepPurple;
+    }
+
+    return Container(
+      margin: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        shape: BoxShape.circle,
+        border: isToday && !isSelected
+            ? Border.all(color: Colors.deepPurple, width: 2)
+            : null,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '${day.day}',
+        style: TextStyle(
+          color: textColor,
+          fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.normal,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+
+  // ─── Existing widgets (updated for selectedDate) ─────────────
 
   Widget _buildEmptyState(BuildContext context) {
     return Center(
@@ -193,9 +484,9 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildStatsHeader(GoalProvider goalProvider) {
-    final completedToday = goalProvider.getCompletedTodayCount();
+    final completedCount = goalProvider.getCompletedCountForDate(_selectedDate);
     final totalGoals = goalProvider.goals.length;
-    final overallRate = goalProvider.getOverallCompletionRate();
+    final dayRate = totalGoals > 0 ? (completedCount / totalGoals * 100) : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -210,14 +501,14 @@ class HomeScreen extends StatelessWidget {
         children: [
           _buildStatItem(
             icon: Icons.check_circle,
-            label: 'Hoy',
-            value: '$completedToday/$totalGoals',
+            label: _isToday ? 'Hoy' : _formatSelectedDate(),
+            value: '$completedCount/$totalGoals',
             color: Colors.green,
           ),
           _buildStatItem(
             icon: Icons.trending_up,
-            label: 'General',
-            value: '${overallRate.toStringAsFixed(0)}%',
+            label: 'Cumplimiento',
+            value: '${dayRate.toStringAsFixed(0)}%',
             color: Colors.blue,
           ),
           _buildStatItem(
@@ -255,6 +546,7 @@ class HomeScreen extends StatelessWidget {
             fontSize: 12,
             color: Colors.grey,
           ),
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -266,7 +558,7 @@ class HomeScreen extends StatelessWidget {
     GoalProvider goalProvider, {
     Key? key,
   }) {
-    final isCompletedToday = goal.isCompletedForPeriod(DateTime.now());
+    final isCompleted = goal.isCompletedForPeriod(_selectedDate);
     final completionRate = goal.getCompletionRate();
     final currentStreak = goal.getCurrentStreak();
 
@@ -285,11 +577,11 @@ class HomeScreen extends StatelessWidget {
             children: [
               // Checkbox de completado
               Checkbox(
-                value: isCompletedToday,
+                value: isCompleted,
                 onChanged: (value) {
                   goalProvider.toggleGoalCompletion(
                     goal,
-                    DateTime.now(),
+                    _selectedDate,
                     value ?? false,
                   );
                 },
@@ -307,10 +599,10 @@ class HomeScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        decoration: isCompletedToday
+                        decoration: isCompleted
                             ? TextDecoration.lineThrough
                             : null,
-                        color: isCompletedToday ? Colors.grey : null,
+                        color: isCompleted ? Colors.grey : null,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -414,6 +706,8 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // ─── Helpers ─────────────────────────────────────────────────
+
   IconData _getFrequencyIcon(frequency) {
     switch (frequency) {
       case Frequency.daily:
@@ -447,6 +741,8 @@ class HomeScreen extends StatelessWidget {
     if (rate >= 50) return Colors.orange;
     return Colors.red;
   }
+
+  // ─── Dialogs ─────────────────────────────────────────────────
 
   void _showGoalDetailsDialog(
     BuildContext context,

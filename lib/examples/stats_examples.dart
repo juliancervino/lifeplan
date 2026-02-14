@@ -37,10 +37,10 @@ void main() {
   
   
   // ============================================
-  // EJEMPLO 2: Obtener datos para gráfico de tendencia
+  // EJEMPLO 2: Obtener datos para gráfico de tendencia (objetivos diarios)
   // ============================================
   
-  final trendData = StatsService.getTrendData(goal, points: 30);
+  final trendData = StatsService.getDailyTrendData([goal], days: 30);
   
   print('\n📊 Datos de tendencia (últimos 30 días):');
   for (var i = 0; i < trendData.length; i += 5) {

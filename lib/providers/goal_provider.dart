@@ -166,4 +166,26 @@ class GoalProvider with ChangeNotifier {
     final today = DateTime.now();
     return _goals.where((goal) => goal.isCompletedForPeriod(today)).length;
   }
+
+  /// Obtiene el total de objetivos completados para una fecha dada
+  int getCompletedCountForDate(DateTime date) {
+    return _goals.where((goal) => goal.isCompletedForPeriod(date)).length;
+  }
+
+  /// Ratio de cumplimiento de objetivos DIARIOS para una fecha (0.0 a 1.0)
+  /// Solo cuenta objetivos con Frequency.daily. Devuelve -1 si no hay goals diarios.
+  double getDailyGoalCompletionRatio(DateTime date) {
+    final dailyGoals = _goals.where((g) => g.frequency == Frequency.daily).toList();
+    if (dailyGoals.isEmpty) return -1;
+    final completed = dailyGoals.where((g) => g.isCompletedOn(date)).length;
+    return completed / dailyGoals.length;
+  }
+
+  /// Obtiene la fecha de creación más antigua entre todos los objetivos
+  DateTime? getEarliestCreatedDate() {
+    if (_goals.isEmpty) return null;
+    return _goals.map((g) => g.createdDate).reduce(
+      (a, b) => a.isBefore(b) ? a : b,
+    );
+  }
 }

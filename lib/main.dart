@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'services/database_service.dart';
 import 'providers/goal_provider.dart';
 import 'providers/settings_provider.dart';
@@ -8,6 +9,9 @@ import 'screens/home_screen.dart';
 void main() async {
   // Asegura que los widgets de Flutter estén inicializados
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar locale español para el calendario
+  await initializeDateFormatting('es');
 
   // Captura errores globales
   FlutterError.onError = (FlutterErrorDetails details) {

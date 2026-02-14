@@ -2,167 +2,170 @@ import '../models/goal.dart';
 import '../models/frequency.dart';
 
 class StatsService {
-  /// Normaliza una fecha a medianoche (00:00:00) para evitar problemas de comparación
+  /// Normaliza una fecha a medianoche (00:00:00)
   static DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  /// Calcula el porcentaje de cumplimiento de un objetivo basado en su frecuencia
-  /// y los días que deberían haberse cumplido en un periodo
+  /// Calcula el porcentaje de cumplimiento de un objetivo en los últimos N días.
+  ///
+  /// Para diarios: días marcados / días esperados.
+  /// Para semanales: semanas con al menos 1 marca / semanas en el periodo.
+  /// Para mensuales: meses con al menos 1 marca / meses en el periodo.
+  /// Para anuales: años con al menos 1 marca / años en el periodo.
   static double calculateCompletionPercentage(Goal goal, {int days = 30}) {
     final now = _normalizeDate(DateTime.now());
     final createdNorm = _normalizeDate(goal.createdDate);
-    final startDate = now.subtract(Duration(days: days));
-    
-    // Obtener días esperados según la frecuencia
-    final expectedDays = _getExpectedDaysInPeriod(
-      goal.frequency, 
-      startDate, 
-      now,
-      createdNorm,
-    );
-    
-    if (expectedDays == 0) return 0.0;
-    
-    // Contar días realmente completados en ese periodo
-    int completedDays = 0;
-    for (var i = 0; i < days; i++) {
-      final checkDate = now.subtract(Duration(days: i));
-      if (checkDate.isBefore(createdNorm)) break;
-      
-      if (goal.isCompletedOn(checkDate)) {
-        completedDays++;
-      }
-    }
-    
-    return (completedDays / expectedDays * 100).clamp(0.0, 100.0);
-  }
-  
-  /// Calcula cuántos días se esperaban cumplir en un periodo según la frecuencia
-  static int _getExpectedDaysInPeriod(
-    Frequency frequency,
-    DateTime startDate,
-    DateTime endDate,
-    DateTime goalCreatedDate,
-  ) {
-    // Ajustar fechas si el objetivo fue creado después
-    final effectiveStart = startDate.isAfter(goalCreatedDate) 
-        ? startDate 
-        : goalCreatedDate;
-    
-    if (effectiveStart.isAfter(endDate)) return 0;
-    
-    final totalDays = endDate.difference(effectiveStart).inDays + 1;
-    
-    switch (frequency) {
+
+    switch (goal.frequency) {
       case Frequency.daily:
-        return totalDays;
-        
+        int expected = 0;
+        int completed = 0;
+        for (var i = 0; i < days; i++) {
+          final date = now.subtract(Duration(days: i));
+          if (date.isBefore(createdNorm)) break;
+          expected++;
+          if (goal.isCompletedOn(date)) completed++;
+        }
+        return expected > 0 ? (completed / expected * 100).clamp(0.0, 100.0) : 0.0;
+
       case Frequency.weekly:
-        // 1 vez por semana
-        return (totalDays / 7).ceil();
-        
+        final startDate = now.subtract(Duration(days: days));
+        final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
+        if (effectiveStart.isAfter(now)) return 0.0;
+
+        final completedWeeks = <String>{};
+        final expectedWeeks = <String>{};
+        for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          final wk = _weekKey(d);
+          expectedWeeks.add(wk);
+          if (goal.isCompletedOn(d)) completedWeeks.add(wk);
+        }
+        return expectedWeeks.isNotEmpty
+            ? (completedWeeks.length / expectedWeeks.length * 100).clamp(0.0, 100.0)
+            : 0.0;
+
       case Frequency.monthly:
-        // 1 vez por mes
-        final months = _monthsBetween(effectiveStart, endDate);
-        return months + 1;
-        
+        final startDate = now.subtract(Duration(days: days));
+        final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
+        if (effectiveStart.isAfter(now)) return 0.0;
+
+        final completedMonths = <String>{};
+        final expectedMonths = <String>{};
+        for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          final mk = '${d.year}-${d.month}';
+          expectedMonths.add(mk);
+          if (goal.isCompletedOn(d)) completedMonths.add(mk);
+        }
+        return expectedMonths.isNotEmpty
+            ? (completedMonths.length / expectedMonths.length * 100).clamp(0.0, 100.0)
+            : 0.0;
+
       case Frequency.yearly:
-        // 1 vez por año
-        final years = endDate.year - effectiveStart.year;
-        return years + 1;
+        final startDate = now.subtract(Duration(days: days));
+        final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
+        if (effectiveStart.isAfter(now)) return 0.0;
+
+        final completedYears = <int>{};
+        final expectedYears = <int>{};
+        for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          expectedYears.add(d.year);
+          if (goal.isCompletedOn(d)) completedYears.add(d.year);
+        }
+        return expectedYears.isNotEmpty
+            ? (completedYears.length / expectedYears.length * 100).clamp(0.0, 100.0)
+            : 0.0;
     }
   }
-  
-  /// Calcula los meses entre dos fechas
-  static int _monthsBetween(DateTime start, DateTime end) {
-    return (end.year - start.year) * 12 + (end.month - start.month);
+
+  /// Clave de semana basada en el lunes de esa semana
+  static String _weekKey(DateTime d) {
+    final monday = d.subtract(Duration(days: d.weekday - 1));
+    return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
   }
-  
-  /// Obtiene datos para gráfico de tendencia de los últimos N días/semanas
-  static List<CompletionDataPoint> getTrendData(
-    Goal goal, {
-    int points = 30,
+
+  /// Datos para el gráfico de tendencia global de objetivos diarios.
+  ///
+  /// Para cada uno de los últimos N días, calcula el % de objetivos diarios
+  /// completados ese día (completados / total diarios * 100).
+  /// Siempre genera exactamente [days] puntos.
+  static List<CompletionDataPoint> getDailyTrendData(
+    List<Goal> goals, {
+    int days = 30,
   }) {
     final now = _normalizeDate(DateTime.now());
-    final createdNorm = _normalizeDate(goal.createdDate);
+    final dailyGoals = goals.where((g) => g.frequency == Frequency.daily).toList();
     final dataPoints = <CompletionDataPoint>[];
-    
-    // Determinar si usar días o semanas según la frecuencia
-    final useWeeks = goal.frequency == Frequency.weekly || 
-                     goal.frequency == Frequency.monthly;
-    final groupSize = useWeeks ? 7 : 1;
-    
-    for (var i = points - 1; i >= 0; i--) {
-      final date = now.subtract(Duration(days: i * groupSize));
-      
-      // Calcular cumplimiento para ese punto
-      double completionRate = 0.0;
-      
-      if (useWeeks) {
-        // Para semanas, revisar los 7 días
-        int completedInWeek = 0;
-        int expectedInWeek = 0;
-        
-        for (var d = 0; d < 7; d++) {
-          final checkDate = date.add(Duration(days: d));
-          if (checkDate.isAfter(now)) break;
-          if (checkDate.isBefore(createdNorm)) continue;
-          
-          expectedInWeek++;
-          if (goal.isCompletedOn(checkDate)) {
-            completedInWeek++;
-          }
-        }
-        
-        completionRate = expectedInWeek > 0 
-            ? (completedInWeek / expectedInWeek) * 100 
-            : 0.0;
-      } else {
-        // Para días, revisar si está completado (incluye el día de creación)
-        if (!date.isBefore(createdNorm) && !date.isAfter(now)) {
-          completionRate = goal.isCompletedOn(date) ? 100.0 : 0.0;
-        }
+
+    if (dailyGoals.isEmpty) return dataPoints;
+
+    for (var i = days - 1; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+
+      // Solo contar goals que ya existían en esa fecha
+      final activeGoals = dailyGoals.where(
+        (g) => !date.isBefore(_normalizeDate(g.createdDate)),
+      ).toList();
+
+      double rate = 0.0;
+      if (activeGoals.isNotEmpty) {
+        final completed = activeGoals.where((g) => g.isCompletedOn(date)).length;
+        rate = completed / activeGoals.length * 100;
       }
-      
-      dataPoints.add(CompletionDataPoint(
-        date: date,
-        completionRate: completionRate,
-      ));
+
+      dataPoints.add(CompletionDataPoint(date: date, completionRate: rate));
     }
-    
+
     return dataPoints;
   }
-  
+
   /// Calcula la "Puntuación de Vida" (Life Score) del 0 al 100
-  /// basada en el promedio de cumplimiento de todos los hábitos
   static double calculateLifeScore(List<Goal> goals, {int days = 30}) {
     if (goals.isEmpty) return 0.0;
-    
-    double totalCompletion = 0.0;
-    int validGoals = 0;
-    
+
+    double total = 0.0;
     for (var goal in goals) {
-      final completion = calculateCompletionPercentage(goal, days: days);
-      totalCompletion += completion;
-      validGoals++;
+      total += calculateCompletionPercentage(goal, days: days);
     }
-    
-    return validGoals > 0 ? totalCompletion / validGoals : 0.0;
+    return total / goals.length;
   }
-  
-  /// Calcula Life Scores desglosados por frecuencia (diario, semanal, mensual)
+
+  /// Life Scores desglosados por frecuencia.
+  /// Cada frecuencia usa una ventana temporal apropiada:
+  /// - Diarios: últimos 30 días
+  /// - Semanales: últimas 8 semanas (56 días)
+  /// - Mensuales: últimos 6 meses (180 días)
+  /// - Anuales: últimos 365 días
   static FrequencyScores calculateFrequencyScores(List<Goal> goals, {int days = 30}) {
     final dailyGoals = goals.where((g) => g.frequency == Frequency.daily).toList();
     final weeklyGoals = goals.where((g) => g.frequency == Frequency.weekly).toList();
     final monthlyGoals = goals.where((g) => g.frequency == Frequency.monthly).toList();
+    final yearlyGoals = goals.where((g) => g.frequency == Frequency.yearly).toList();
+
+    final dailyScore = _averageCompletion(dailyGoals, days: days);
+    final weeklyScore = _averageCompletion(weeklyGoals, days: 56);
+    final monthlyScore = _averageCompletion(monthlyGoals, days: 180);
+    final yearlyScore = _averageCompletion(yearlyGoals, days: 365);
+
+    // Promedio ponderado por cantidad de objetivos
+    double overallScore = 0.0;
+    if (goals.isNotEmpty) {
+      double weightedSum = 0.0;
+      weightedSum += dailyScore * dailyGoals.length;
+      weightedSum += weeklyScore * weeklyGoals.length;
+      weightedSum += monthlyScore * monthlyGoals.length;
+      weightedSum += yearlyScore * yearlyGoals.length;
+      overallScore = weightedSum / goals.length;
+    }
 
     return FrequencyScores(
-      dailyScore: _averageCompletion(dailyGoals, days: days),
+      dailyScore: dailyScore,
       dailyCount: dailyGoals.length,
-      weeklyScore: _averageCompletion(weeklyGoals, days: days),
+      weeklyScore: weeklyScore,
       weeklyCount: weeklyGoals.length,
-      monthlyScore: _averageCompletion(monthlyGoals, days: days),
+      monthlyScore: monthlyScore,
       monthlyCount: monthlyGoals.length,
-      overallScore: calculateLifeScore(goals, days: days),
+      yearlyScore: yearlyScore,
+      yearlyCount: yearlyGoals.length,
+      overallScore: overallScore,
       totalCount: goals.length,
     );
   }
@@ -174,28 +177,22 @@ class StatsService {
         .reduce((a, b) => a + b);
     return total / goals.length;
   }
-  
-  /// Obtiene estadísticas generales de un objetivo
+
+  /// Estadísticas generales de un objetivo
   static GoalStats getGoalStats(Goal goal) {
     final now = _normalizeDate(DateTime.now());
     final daysActive = now.difference(_normalizeDate(goal.createdDate)).inDays + 1;
-    
-    // Calcular cumplimiento total
-    final totalRecords = goal.records.length;
+
     final completedRecords = goal.records.values.where((v) => v).length;
-    final totalCompletionRate = totalRecords > 0 
-        ? (completedRecords / totalRecords) * 100 
+    final totalRecords = goal.records.length;
+    final totalCompletionRate = totalRecords > 0
+        ? (completedRecords / totalRecords) * 100
         : 0.0;
-    
-    // Cumplimiento últimos 30 días
+
     final last30DaysRate = calculateCompletionPercentage(goal, days: 30);
-    
-    // Racha actual
     final currentStreak = goal.getCurrentStreak();
-    
-    // Mejor racha
     final bestStreak = _calculateBestStreak(goal);
-    
+
     return GoalStats(
       daysActive: daysActive,
       totalCompletionRate: totalCompletionRate,
@@ -205,29 +202,28 @@ class StatsService {
       totalCompletions: completedRecords,
     );
   }
-  
-  /// Calcula la mejor racha histórica
+
+  /// Mejor racha histórica
   static int _calculateBestStreak(Goal goal) {
     if (goal.records.isEmpty) return 0;
-    
+
     int maxStreak = 0;
     int currentStreak = 0;
-    
-    // Ordenar fechas
+
     final sortedDates = goal.records.keys.toList()
       ..sort((a, b) => DateTime.parse(a).compareTo(DateTime.parse(b)));
-    
+
     DateTime? previousDate;
-    
+
     for (var dateStr in sortedDates) {
       final date = DateTime.parse(dateStr);
       final completed = goal.records[dateStr] ?? false;
-      
+
       if (completed) {
-        if (previousDate == null || 
+        if (previousDate == null ||
             date.difference(previousDate).inDays == 1) {
           currentStreak++;
-          maxStreak = currentStreak > maxStreak ? currentStreak : maxStreak;
+          if (currentStreak > maxStreak) maxStreak = currentStreak;
         } else {
           currentStreak = 1;
         }
@@ -237,37 +233,34 @@ class StatsService {
         previousDate = null;
       }
     }
-    
+
     return maxStreak;
   }
-  
-  /// Obtiene estadísticas por categoría
+
+  /// Estadísticas por categoría
   static Map<String, CategoryStats> getCategoryStats(List<Goal> goals) {
     final categoryMap = <String, List<Goal>>{};
-    
-    // Agrupar por categoría
+
     for (var goal in goals) {
       categoryMap.putIfAbsent(goal.category, () => []).add(goal);
     }
-    
-    // Calcular stats por categoría
+
     final stats = <String, CategoryStats>{};
-    
     for (var entry in categoryMap.entries) {
       final categoryGoals = entry.value;
-      final avgCompletion = categoryGoals.isEmpty 
-          ? 0.0 
+      final avgCompletion = categoryGoals.isEmpty
+          ? 0.0
           : categoryGoals
               .map((g) => calculateCompletionPercentage(g))
               .reduce((a, b) => a + b) / categoryGoals.length;
-      
+
       stats[entry.key] = CategoryStats(
         category: entry.key,
         goalCount: categoryGoals.length,
         averageCompletion: avgCompletion,
       );
     }
-    
+
     return stats;
   }
 }
@@ -276,7 +269,7 @@ class StatsService {
 class CompletionDataPoint {
   final DateTime date;
   final double completionRate;
-  
+
   CompletionDataPoint({
     required this.date,
     required this.completionRate,
@@ -291,7 +284,7 @@ class GoalStats {
   final int currentStreak;
   final int bestStreak;
   final int totalCompletions;
-  
+
   GoalStats({
     required this.daysActive,
     required this.totalCompletionRate,
@@ -307,7 +300,7 @@ class CategoryStats {
   final String category;
   final int goalCount;
   final double averageCompletion;
-  
+
   CategoryStats({
     required this.category,
     required this.goalCount,
@@ -323,6 +316,8 @@ class FrequencyScores {
   final int weeklyCount;
   final double monthlyScore;
   final int monthlyCount;
+  final double yearlyScore;
+  final int yearlyCount;
   final double overallScore;
   final int totalCount;
 
@@ -333,6 +328,8 @@ class FrequencyScores {
     required this.weeklyCount,
     required this.monthlyScore,
     required this.monthlyCount,
+    required this.yearlyScore,
+    required this.yearlyCount,
     required this.overallScore,
     required this.totalCount,
   });
