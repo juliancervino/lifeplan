@@ -39,7 +39,38 @@ class Goal extends HiveObject {
   /// Marca el objetivo como cumplido para una fecha específica
   void markAsCompleted(DateTime date, bool completed) {
     final dateKey = _formatDate(date);
-    records[dateKey] = completed;
+    
+    if (completed) {
+      // Marcar como completado
+      records[dateKey] = true;
+    } else {
+      // Desmarcar: para objetivos mensuales/anuales, limpiar todo el periodo
+      switch (frequency) {
+        case Frequency.daily:
+          records[dateKey] = false;
+          break;
+        case Frequency.weekly:
+          // Limpiar toda la semana
+          final weekStart = date.subtract(Duration(days: date.weekday - 1));
+          for (var i = 0; i < 7; i++) {
+            final day = weekStart.add(Duration(days: i));
+            final key = _formatDate(day);
+            records.remove(key);
+          }
+          break;
+        case Frequency.monthly:
+          // Limpiar todo el mes
+          final monthPrefix = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+          records.removeWhere((key, value) => key.startsWith(monthPrefix));
+          break;
+        case Frequency.yearly:
+          // Limpiar todo el año
+          final yearPrefix = '${date.year}-';
+          records.removeWhere((key, value) => key.startsWith(yearPrefix));
+          break;
+      }
+    }
+    
     save(); // Guarda en Hive automáticamente
   }
 

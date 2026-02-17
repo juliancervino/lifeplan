@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late DateTime _selectedDate;
   bool _isCalendarVisible = false;
+  Frequency? _selectedFrequency; // null = Todos
 
   @override
   void initState() {
@@ -28,27 +29,83 @@ class _HomeScreenState extends State<HomeScreen> {
 
   DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  bool get _isToday => isSameDay(_selectedDate, _normalizeDate(DateTime.now()));
+  bool get _isToday {
+    final now = _normalizeDate(DateTime.now());
+    switch (_selectedFrequency) {
+      case null:
+      case Frequency.daily:
+        return isSameDay(_selectedDate, now);
+      case Frequency.weekly:
+        final weekStart = now.subtract(Duration(days: now.weekday - 1));
+        final selWeekStart = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+        return isSameDay(weekStart, selWeekStart);
+      case Frequency.monthly:
+        return _selectedDate.year == now.year && _selectedDate.month == now.month;
+      case Frequency.yearly:
+        return _selectedDate.year == now.year;
+    }
+  }
 
   String _formatSelectedDate() {
     final now = _normalizeDate(DateTime.now());
     final yesterday = now.subtract(const Duration(days: 1));
 
-    if (isSameDay(_selectedDate, now)) return 'Hoy';
-    if (isSameDay(_selectedDate, yesterday)) return 'Ayer';
-    return DateFormat('d MMM yyyy', 'es').format(_selectedDate);
+    switch (_selectedFrequency) {
+      case null:
+      case Frequency.daily:
+        if (isSameDay(_selectedDate, now)) return 'Hoy';
+        if (isSameDay(_selectedDate, yesterday)) return 'Ayer';
+        return DateFormat('d MMM yyyy', 'es').format(_selectedDate);
+      case Frequency.weekly:
+        final weekStart = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+        final weekEnd = weekStart.add(const Duration(days: 6));
+        return '${DateFormat('d MMM', 'es').format(weekStart)} - ${DateFormat('d MMM', 'es').format(weekEnd)}';
+      case Frequency.monthly:
+        final formatted = DateFormat('MMMM yyyy', 'es').format(_selectedDate);
+        return formatted[0].toUpperCase() + formatted.substring(1);
+      case Frequency.yearly:
+        return '${_selectedDate.year}';
+    }
   }
 
-  void _goToPreviousDay() {
+  void _goToPrevious() {
     setState(() {
-      _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+      switch (_selectedFrequency) {
+        case null:
+        case Frequency.daily:
+          _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+          break;
+        case Frequency.weekly:
+          _selectedDate = _selectedDate.subtract(const Duration(days: 7));
+          break;
+        case Frequency.monthly:
+          _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1, 1);
+          break;
+        case Frequency.yearly:
+          _selectedDate = DateTime(_selectedDate.year - 1, _selectedDate.month, _selectedDate.day);
+          break;
+      }
     });
   }
 
-  void _goToNextDay() {
+  void _goToNext() {
     if (!_isToday) {
       setState(() {
-        _selectedDate = _selectedDate.add(const Duration(days: 1));
+        switch (_selectedFrequency) {
+          case null:
+          case Frequency.daily:
+            _selectedDate = _selectedDate.add(const Duration(days: 1));
+            break;
+          case Frequency.weekly:
+            _selectedDate = _selectedDate.add(const Duration(days: 7));
+            break;
+          case Frequency.monthly:
+            _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 1);
+            break;
+          case Frequency.yearly:
+            _selectedDate = DateTime(_selectedDate.year + 1, _selectedDate.month, _selectedDate.day);
+            break;
+        }
       });
     }
   }
@@ -58,6 +115,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _selectedDate = _normalizeDate(DateTime.now());
       _isCalendarVisible = false;
     });
+  }
+
+  List<Goal> _filterGoals(List<Goal> goals) {
+    if (_selectedFrequency == null) return goals;
+    return goals.where((g) => g.frequency == _selectedFrequency).toList();
   }
 
   @override
@@ -131,37 +193,55 @@ class _HomeScreenState extends State<HomeScreen> {
             return _buildEmptyState(context);
           }
 
+          final filteredGoals = _filterGoals(goalProvider.goals);
+
           return Column(
             children: [
+              // Filtro de frecuencia
+              _buildFrequencyFilter(),
               // Barra de navegación de fecha
               _buildDateNavigationBar(),
-              // Calendario expandible
-              _buildCalendarView(goalProvider),
+              // Calendario expandible (solo para Todos / Diarios)
+              if (_selectedFrequency == null || _selectedFrequency == Frequency.daily)
+                _buildCalendarView(goalProvider),
               // Cabecera de estadísticas
-              _buildStatsHeader(goalProvider),
+              _buildStatsHeader(goalProvider, filteredGoals),
               // Lista de objetivos
               Expanded(
-                child: ReorderableListView.builder(
-                  padding: const EdgeInsets.all(8.0),
-                  itemCount: goalProvider.goals.length,
-                  onReorder: (oldIndex, newIndex) {
-                    goalProvider.reorderGoals(oldIndex, newIndex);
-                  },
-                  proxyDecorator: (child, index, animation) {
-                    return Material(
-                      elevation: 4,
-                      borderRadius: BorderRadius.circular(12),
-                      child: child,
-                    );
-                  },
-                  itemBuilder: (context, index) {
-                    final goal = goalProvider.goals[index];
-                    return _buildGoalCard(
-                      context, goal, goalProvider,
-                      key: ValueKey(goal.id),
-                    );
-                  },
-                ),
+                child: filteredGoals.isEmpty
+                    ? Center(
+                        child: Text(
+                          _selectedFrequency != null
+                              ? 'No hay objetivos ${_selectedFrequency!.displayName.toLowerCase()}es'
+                              : 'No hay objetivos',
+                          style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+                        ),
+                      )
+                    : ReorderableListView.builder(
+                        padding: const EdgeInsets.all(8.0),
+                        itemCount: filteredGoals.length,
+                        onReorder: (oldIndex, newIndex) {
+                          // Mapear indices filtrados a indices reales
+                          if (newIndex > oldIndex) newIndex--;
+                          final realOldIndex = goalProvider.goals.indexOf(filteredGoals[oldIndex]);
+                          final realNewIndex = goalProvider.goals.indexOf(filteredGoals[newIndex]);
+                          goalProvider.reorderGoals(realOldIndex, realNewIndex > realOldIndex ? realNewIndex + 1 : realNewIndex);
+                        },
+                        proxyDecorator: (child, index, animation) {
+                          return Material(
+                            elevation: 4,
+                            borderRadius: BorderRadius.circular(12),
+                            child: child,
+                          );
+                        },
+                        itemBuilder: (context, index) {
+                          final goal = filteredGoals[index];
+                          return _buildGoalCard(
+                            context, goal, goalProvider,
+                            key: ValueKey(goal.id),
+                          );
+                        },
+                      ),
               ),
             ],
           );
@@ -182,6 +262,63 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ─── Frequency Filter ───────────────────────────────────────
+
+  Widget _buildFrequencyFilter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade200),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildFilterChip('Todos', null),
+            const SizedBox(width: 6),
+            _buildFilterChip('📅 Diarios', Frequency.daily),
+            const SizedBox(width: 6),
+            _buildFilterChip('📆 Semanales', Frequency.weekly),
+            const SizedBox(width: 6),
+            _buildFilterChip('🗓️ Mensuales', Frequency.monthly),
+            const SizedBox(width: 6),
+            _buildFilterChip('🌟 Anuales', Frequency.yearly),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, Frequency? frequency) {
+    final isSelected = _selectedFrequency == frequency;
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          color: isSelected ? Colors.white : Colors.deepPurple.shade700,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          _selectedFrequency = selected ? frequency : null;
+          _selectedDate = _normalizeDate(DateTime.now());
+          _isCalendarVisible = false;
+        });
+      },
+      selectedColor: Colors.deepPurple,
+      backgroundColor: Colors.deepPurple.shade50,
+      checkmarkColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+
   // ─── Date Navigation Bar ─────────────────────────────────────
 
   Widget _buildDateNavigationBar() {
@@ -199,8 +336,8 @@ class _HomeScreenState extends State<HomeScreen> {
           // Flecha izquierda
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 28),
-            onPressed: _goToPreviousDay,
-            tooltip: 'Día anterior',
+            onPressed: _goToPrevious,
+            tooltip: 'Anterior',
           ),
           // Fecha (tap para abrir calendario)
           GestureDetector(
@@ -240,15 +377,15 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          // Flecha derecha (deshabilitada si es hoy)
+          // Flecha derecha (deshabilitada si es periodo actual)
           IconButton(
             icon: Icon(
               Icons.chevron_right,
               size: 28,
               color: _isToday ? Colors.grey.shade300 : null,
             ),
-            onPressed: _isToday ? null : _goToNextDay,
-            tooltip: 'Día siguiente',
+            onPressed: _isToday ? null : _goToNext,
+            tooltip: 'Siguiente',
           ),
           // Botón "Hoy" (visible solo si no estamos en hoy)
           if (!_isToday)
@@ -483,9 +620,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildStatsHeader(GoalProvider goalProvider) {
-    final completedCount = goalProvider.getCompletedCountForDate(_selectedDate);
-    final totalGoals = goalProvider.goals.length;
+  Widget _buildStatsHeader(GoalProvider goalProvider, List<Goal> filteredGoals) {
+    final completedCount = filteredGoals.where((g) => g.isCompletedForPeriod(_selectedDate)).length;
+    final totalGoals = filteredGoals.length;
     final dayRate = totalGoals > 0 ? (completedCount / totalGoals * 100) : 0.0;
 
     return Container(

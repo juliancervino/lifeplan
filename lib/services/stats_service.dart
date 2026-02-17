@@ -5,7 +5,111 @@ class StatsService {
   /// Normaliza una fecha a medianoche (00:00:00)
   static DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
+  /// Calcula estadísticas agregadas para un grupo de objetivos de la misma frecuencia
+  ///
+  /// NO tiene en cuenta la fecha de creación del objetivo.
+  /// Para diarios: cada objetivo cuenta como 1 por día × N días
+  /// Para semanales: cada objetivo cuenta como 1 por semana × N semanas
+  /// Para mensuales: cada objetivo cuenta como 1 por mes × N meses
+  /// Para anuales: cada objetivo cuenta como 1 por año × N años
+  static FrequencyStats calculateAggregateStats(
+    List<Goal> goals,
+    Frequency frequency, {
+    required int days,
+  }) {
+    final now = _normalizeDate(DateTime.now());
+    final startDate = now.subtract(Duration(days: days));
+
+    if (goals.isEmpty) {
+      return FrequencyStats(
+        startDate: startDate,
+        endDate: now,
+        completed: 0,
+        expected: 0,
+        percentage: 0.0,
+      );
+    }
+
+    int totalCompleted = 0;
+    int totalExpected = 0;
+
+    switch (frequency) {
+      case Frequency.daily:
+        // Cada objetivo cuenta como 1 oportunidad por día
+        final numDays = now.difference(startDate).inDays + 1;
+        totalExpected = goals.length * numDays;
+        for (var goal in goals) {
+          for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+            if (goal.isCompletedOn(d)) totalCompleted++;
+          }
+        }
+        break;
+
+      case Frequency.weekly:
+        // Determinar las semanas únicas en el rango
+        final weeks = <String>{};
+        for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          weeks.add(_weekKey(d));
+        }
+        totalExpected = goals.length * weeks.length;
+        for (var goal in goals) {
+          final completedWeeks = <String>{};
+          for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+            if (goal.isCompletedOn(d)) completedWeeks.add(_weekKey(d));
+          }
+          totalCompleted += completedWeeks.length;
+        }
+        break;
+
+      case Frequency.monthly:
+        // Determinar los meses únicos en el rango
+        final months = <String>{};
+        for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          months.add('${d.year}-${d.month.toString().padLeft(2, '0')}');
+        }
+        totalExpected = goals.length * months.length;
+        for (var goal in goals) {
+          final completedMonths = <String>{};
+          for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+            final mk = '${d.year}-${d.month.toString().padLeft(2, '0')}';
+            if (goal.isCompletedOn(d)) completedMonths.add(mk);
+          }
+          totalCompleted += completedMonths.length;
+        }
+        break;
+
+      case Frequency.yearly:
+        // Determinar los años únicos en el rango
+        final years = <String>{};
+        for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          years.add('${d.year}');
+        }
+        totalExpected = goals.length * years.length;
+        for (var goal in goals) {
+          final completedYears = <String>{};
+          for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+            if (goal.isCompletedOn(d)) completedYears.add('${d.year}');
+          }
+          totalCompleted += completedYears.length;
+        }
+        break;
+    }
+
+    final percentage = totalExpected > 0 
+        ? (totalCompleted / totalExpected * 100).clamp(0.0, 100.0)
+        : 0.0;
+
+    return FrequencyStats(
+      startDate: startDate,
+      endDate: now,
+      completed: totalCompleted,
+      expected: totalExpected,
+      percentage: percentage,
+    );
+  }
+
   /// Calcula el porcentaje de cumplimiento de un objetivo en los últimos N días.
+
   ///
   /// Para diarios: días marcados / días esperados.
   /// Para semanales: semanas con al menos 1 marca / semanas en el periodo.
@@ -51,7 +155,7 @@ class StatsService {
         final completedMonths = <String>{};
         final expectedMonths = <String>{};
         for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-          final mk = '${d.year}-${d.month}';
+          final mk = '${d.year}-${d.month.toString().padLeft(2, '0')}';
           expectedMonths.add(mk);
           if (goal.isCompletedOn(d)) completedMonths.add(mk);
         }
@@ -64,11 +168,12 @@ class StatsService {
         final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
         if (effectiveStart.isAfter(now)) return 0.0;
 
-        final completedYears = <int>{};
-        final expectedYears = <int>{};
+        final completedYears = <String>{};
+        final expectedYears = <String>{};
         for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-          expectedYears.add(d.year);
-          if (goal.isCompletedOn(d)) completedYears.add(d.year);
+          final yk = '${d.year}';
+          expectedYears.add(yk);
+          if (goal.isCompletedOn(d)) completedYears.add(yk);
         }
         return expectedYears.isNotEmpty
             ? (completedYears.length / expectedYears.length * 100).clamp(0.0, 100.0)
@@ -130,41 +235,45 @@ class StatsService {
 
   /// Life Scores desglosados por frecuencia.
   /// Cada frecuencia usa una ventana temporal apropiada:
-  /// - Diarios: últimos 30 días
+  /// - Diarios: últimos 60 días
   /// - Semanales: últimas 8 semanas (56 días)
   /// - Mensuales: últimos 6 meses (180 días)
-  /// - Anuales: últimos 365 días
+  /// - Anuales: últimos 12 meses (365 días)
   static FrequencyScores calculateFrequencyScores(List<Goal> goals, {int days = 30}) {
     final dailyGoals = goals.where((g) => g.frequency == Frequency.daily).toList();
     final weeklyGoals = goals.where((g) => g.frequency == Frequency.weekly).toList();
     final monthlyGoals = goals.where((g) => g.frequency == Frequency.monthly).toList();
     final yearlyGoals = goals.where((g) => g.frequency == Frequency.yearly).toList();
 
-    final dailyScore = _averageCompletion(dailyGoals, days: days);
-    final weeklyScore = _averageCompletion(weeklyGoals, days: 56);
-    final monthlyScore = _averageCompletion(monthlyGoals, days: 180);
-    final yearlyScore = _averageCompletion(yearlyGoals, days: 365);
+    final dailyStats = calculateAggregateStats(dailyGoals, Frequency.daily, days: 60);
+    final weeklyStats = calculateAggregateStats(weeklyGoals, Frequency.weekly, days: 56);
+    final monthlyStats = calculateAggregateStats(monthlyGoals, Frequency.monthly, days: 180);
+    final yearlyStats = calculateAggregateStats(yearlyGoals, Frequency.yearly, days: 365);
 
     // Promedio ponderado por cantidad de objetivos
     double overallScore = 0.0;
     if (goals.isNotEmpty) {
       double weightedSum = 0.0;
-      weightedSum += dailyScore * dailyGoals.length;
-      weightedSum += weeklyScore * weeklyGoals.length;
-      weightedSum += monthlyScore * monthlyGoals.length;
-      weightedSum += yearlyScore * yearlyGoals.length;
+      weightedSum += dailyStats.percentage * dailyGoals.length;
+      weightedSum += weeklyStats.percentage * weeklyGoals.length;
+      weightedSum += monthlyStats.percentage * monthlyGoals.length;
+      weightedSum += yearlyStats.percentage * yearlyGoals.length;
       overallScore = weightedSum / goals.length;
     }
 
     return FrequencyScores(
-      dailyScore: dailyScore,
+      dailyScore: dailyStats.percentage,
       dailyCount: dailyGoals.length,
-      weeklyScore: weeklyScore,
+      dailyStats: dailyStats,
+      weeklyScore: weeklyStats.percentage,
       weeklyCount: weeklyGoals.length,
-      monthlyScore: monthlyScore,
+      weeklyStats: weeklyStats,
+      monthlyScore: monthlyStats.percentage,
       monthlyCount: monthlyGoals.length,
-      yearlyScore: yearlyScore,
+      monthlyStats: monthlyStats,
+      yearlyScore: yearlyStats.percentage,
       yearlyCount: yearlyGoals.length,
+      yearlyStats: yearlyStats,
       overallScore: overallScore,
       totalCount: goals.length,
     );
@@ -312,25 +421,50 @@ class CategoryStats {
 class FrequencyScores {
   final double dailyScore;
   final int dailyCount;
+  final FrequencyStats dailyStats;
   final double weeklyScore;
   final int weeklyCount;
+  final FrequencyStats weeklyStats;
   final double monthlyScore;
   final int monthlyCount;
+  final FrequencyStats monthlyStats;
   final double yearlyScore;
   final int yearlyCount;
+  final FrequencyStats yearlyStats;
   final double overallScore;
   final int totalCount;
 
   FrequencyScores({
     required this.dailyScore,
     required this.dailyCount,
+    required this.dailyStats,
     required this.weeklyScore,
     required this.weeklyCount,
+    required this.weeklyStats,
     required this.monthlyScore,
     required this.monthlyCount,
+    required this.monthlyStats,
     required this.yearlyScore,
     required this.yearlyCount,
+    required this.yearlyStats,
     required this.overallScore,
     required this.totalCount,
+  });
+}
+
+/// Estadísticas detalladas para una frecuencia específica
+class FrequencyStats {
+  final DateTime startDate;
+  final DateTime endDate;
+  final int completed;
+  final int expected;
+  final double percentage;
+
+  FrequencyStats({
+    required this.startDate,
+    required this.endDate,
+    required this.completed,
+    required this.expected,
+    required this.percentage,
   });
 }

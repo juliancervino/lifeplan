@@ -193,7 +193,8 @@ class _StatsScreenState extends State<StatsScreen> {
                       label: 'Diarios',
                       score: scores.dailyScore,
                       count: scores.dailyCount,
-                      period: '30 días',
+                      period: '60 días',
+                      stats: scores.dailyStats,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -204,6 +205,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       score: scores.weeklyScore,
                       count: scores.weeklyCount,
                       period: '8 sem.',
+                      stats: scores.weeklyStats,
                     ),
                   ),
                 ],
@@ -218,6 +220,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       score: scores.monthlyScore,
                       count: scores.monthlyCount,
                       period: '6 meses',
+                      stats: scores.monthlyStats,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -227,7 +230,8 @@ class _StatsScreenState extends State<StatsScreen> {
                       label: 'Anuales',
                       score: scores.yearlyScore,
                       count: scores.yearlyCount,
-                      period: '1 año',
+                      period: '12 meses',
+                      stats: scores.yearlyStats,
                     ),
                   ),
                 ],
@@ -250,36 +254,85 @@ class _StatsScreenState extends State<StatsScreen> {
     required double score,
     required int count,
     required String period,
+    required FrequencyStats stats,
   }) {
     final color = count > 0 ? _getScoreColor(score) : Colors.grey;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-      decoration: BoxDecoration(
-        color: color.withAlpha(25),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withAlpha(75)),
-      ),
-      child: Column(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
-          const SizedBox(height: 4),
-          Text(
-            count > 0 ? '${score.toStringAsFixed(0)}%' : '—',
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              color: count > 0 ? color : Colors.grey,
+    return InkWell(
+      onTap: count > 0 ? () => _showStatsDetail(context, label, stats, period) : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withAlpha(25),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withAlpha(75)),
+        ),
+        child: Column(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 20)),
+            const SizedBox(height: 4),
+            Text(
+              count > 0 ? '${score.toStringAsFixed(0)}%' : '—',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: count > 0 ? color : Colors.grey,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-          Text(
-            '$count obj. · $period',
-            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              '$count obj. · $period',
+              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showStatsDetail(BuildContext context, String label, FrequencyStats stats, String period) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Estadísticas: $label'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Periodo evaluado',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text('Inicio: ${DateFormat('dd/MM/yyyy').format(stats.startDate)}'),
+            Text('Fin: ${DateFormat('dd/MM/yyyy').format(stats.endDate)}'),
+            const Divider(height: 24),
+            Text(
+              'Resultados',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text('Completados: ${stats.completed}'),
+            Text('Esperados: ${stats.expected}'),
+            Text(
+              'Porcentaje: ${stats.percentage.toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: _getScoreColor(stats.percentage),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
           ),
         ],
       ),
