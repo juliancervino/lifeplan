@@ -698,32 +698,54 @@ class _HomeScreenState extends State<HomeScreen> {
     final isCompleted = goal.isCompletedForPeriod(_selectedDate);
     final completionRate = goal.getCompletionRate();
     final currentStreak = goal.getCurrentStreak();
+    final isDisabled = goal.isBeforeCreation(_selectedDate);
 
     return Card(
       key: key,
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-      elevation: 2,
-      child: InkWell(
-        onTap: () {
-          _showGoalDetailsDialog(context, goal, goalProvider);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              // Checkbox de completado
-              Checkbox(
-                value: isCompleted,
-                onChanged: (value) {
-                  goalProvider.toggleGoalCompletion(
-                    goal,
-                    _selectedDate,
-                    value ?? false,
-                  );
-                },
-                shape: const CircleBorder(),
-              ),
+      elevation: isDisabled ? 0.5 : 2,
+      child: Opacity(
+        opacity: isDisabled ? 0.45 : 1.0,
+        child: InkWell(
+          onTap: () {
+            if (isDisabled) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Este objetivo aún no se había creado en esta fecha'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              return;
+            }
+            _showGoalDetailsDialog(context, goal, goalProvider);
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                // Checkbox de completado (bloqueado si fecha < createdDate)
+                Checkbox(
+                  value: isDisabled ? false : isCompleted,
+                  onChanged: isDisabled
+                      ? null
+                      : (value) {
+                          final success = goalProvider.toggleGoalCompletion(
+                            goal,
+                            _selectedDate,
+                            value ?? false,
+                          );
+                          if (!success && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Este objetivo aún no se había creado en esta fecha'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                  shape: const CircleBorder(),
+                ),
               const SizedBox(width: 8),
 
               // Información del objetivo
@@ -839,6 +861,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

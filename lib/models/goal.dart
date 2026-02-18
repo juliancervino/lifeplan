@@ -36,8 +36,19 @@ class Goal extends HiveObject {
     this.orderIndex = 0,
   }) : records = records ?? {};
 
-  /// Marca el objetivo como cumplido para una fecha específica
+  /// Verifica si una fecha (ignorando hora) es anterior a la creación del objetivo
+  bool isBeforeCreation(DateTime date) {
+    final dateNorm = DateTime(date.year, date.month, date.day);
+    final createdNorm = DateTime(createdDate.year, createdDate.month, createdDate.day);
+    return dateNorm.isBefore(createdNorm);
+  }
+
+  /// Marca el objetivo como cumplido para una fecha específica.
+  /// Guard clause: no permite registrar si la fecha es anterior a createdDate.
   void markAsCompleted(DateTime date, bool completed) {
+    // Guard clause: impedir registro si fecha < createdDate (ignorando hora)
+    if (isBeforeCreation(date)) return;
+
     final dateKey = _formatDate(date);
     
     if (completed) {

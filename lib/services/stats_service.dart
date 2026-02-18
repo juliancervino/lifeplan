@@ -5,13 +5,11 @@ class StatsService {
   /// Normaliza una fecha a medianoche (00:00:00)
   static DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  /// Calcula estadísticas agregadas para un grupo de objetivos de la misma frecuencia
+  /// Calcula estadísticas agregadas para un grupo de objetivos de la misma frecuencia.
   ///
-  /// NO tiene en cuenta la fecha de creación del objetivo.
-  /// Para diarios: cada objetivo cuenta como 1 por día × N días
-  /// Para semanales: cada objetivo cuenta como 1 por semana × N semanas
-  /// Para mensuales: cada objetivo cuenta como 1 por mes × N meses
-  /// Para anuales: cada objetivo cuenta como 1 por año × N años
+  /// Denominador dinámico: para cada objetivo, solo cuenta periodos desde
+  /// max(inicio_del_rango, createdDate) hasta hoy.
+  /// Compara createdDate ignorando la hora (solo year, month, day).
   static FrequencyStats calculateAggregateStats(
     List<Goal> goals,
     Frequency frequency, {
@@ -33,66 +31,58 @@ class StatsService {
     int totalCompleted = 0;
     int totalExpected = 0;
 
-    switch (frequency) {
-      case Frequency.daily:
-        // Cada objetivo cuenta como 1 oportunidad por día
-        final numDays = now.difference(startDate).inDays + 1;
-        totalExpected = goals.length * numDays;
-        for (var goal in goals) {
-          for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+    for (var goal in goals) {
+      final createdNorm = _normalizeDate(goal.createdDate);
+      // fecha_inicio_valida = max(startDate, createdDate)
+      final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
+
+      // Si el objetivo se creó después de hoy, no cuenta
+      if (effectiveStart.isAfter(now)) continue;
+
+      switch (frequency) {
+        case Frequency.daily:
+          for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+            totalExpected++;
             if (goal.isCompletedOn(d)) totalCompleted++;
           }
-        }
-        break;
+          break;
 
-      case Frequency.weekly:
-        // Determinar las semanas únicas en el rango
-        final weeks = <String>{};
-        for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-          weeks.add(_weekKey(d));
-        }
-        totalExpected = goals.length * weeks.length;
-        for (var goal in goals) {
+        case Frequency.weekly:
+          final weeks = <String>{};
           final completedWeeks = <String>{};
-          for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-            if (goal.isCompletedOn(d)) completedWeeks.add(_weekKey(d));
+          for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+            final wk = _weekKey(d);
+            weeks.add(wk);
+            if (goal.isCompletedOn(d)) completedWeeks.add(wk);
           }
+          totalExpected += weeks.length;
           totalCompleted += completedWeeks.length;
-        }
-        break;
+          break;
 
-      case Frequency.monthly:
-        // Determinar los meses únicos en el rango
-        final months = <String>{};
-        for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-          months.add('${d.year}-${d.month.toString().padLeft(2, '0')}');
-        }
-        totalExpected = goals.length * months.length;
-        for (var goal in goals) {
+        case Frequency.monthly:
+          final months = <String>{};
           final completedMonths = <String>{};
-          for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
             final mk = '${d.year}-${d.month.toString().padLeft(2, '0')}';
+            months.add(mk);
             if (goal.isCompletedOn(d)) completedMonths.add(mk);
           }
+          totalExpected += months.length;
           totalCompleted += completedMonths.length;
-        }
-        break;
+          break;
 
-      case Frequency.yearly:
-        // Determinar los años únicos en el rango
-        final years = <String>{};
-        for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-          years.add('${d.year}');
-        }
-        totalExpected = goals.length * years.length;
-        for (var goal in goals) {
+        case Frequency.yearly:
+          final years = <String>{};
           final completedYears = <String>{};
-          for (var d = startDate; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-            if (goal.isCompletedOn(d)) completedYears.add('${d.year}');
+          for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+            final yk = '${d.year}';
+            years.add(yk);
+            if (goal.isCompletedOn(d)) completedYears.add(yk);
           }
+          totalExpected += years.length;
           totalCompleted += completedYears.length;
-        }
-        break;
+          break;
+      }
     }
 
     final percentage = totalExpected > 0 

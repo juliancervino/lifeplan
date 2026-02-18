@@ -121,10 +121,13 @@ class GoalProvider with ChangeNotifier {
     }
   }
 
-  /// Marca un objetivo como completado/no completado en una fecha específica
-  void toggleGoalCompletion(Goal goal, DateTime date, bool completed) {
+  /// Marca un objetivo como completado/no completado en una fecha específica.
+  /// Retorna false si la fecha es anterior a la creación del objetivo.
+  bool toggleGoalCompletion(Goal goal, DateTime date, bool completed) {
+    if (goal.isBeforeCreation(date)) return false;
     goal.markAsCompleted(date, completed);
     notifyListeners();
+    return true;
   }
 
   /// Obtiene objetivos por categoría
