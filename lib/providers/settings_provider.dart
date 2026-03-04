@@ -55,16 +55,23 @@ class SettingsProvider with ChangeNotifier {
       }
 
       // Verificar si hay backup pendiente
-      if (_settings.isBackupPending && GoogleAuthService.isSignedIn) {
-        debugPrint('📋 Backup pendiente detectado, ejecutando...');
-        await performBackup(silent: true);
-      }
+      await checkAndRunPendingBackup();
     } catch (e) {
       debugPrint('❌ Error inicializando SettingsProvider: $e');
       _errorMessage = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Comprueba si hay un backup pendiente y lo ejecuta si procede.
+  /// Se llama al inicializar el provider y al volver a la app desde background.
+  Future<void> checkAndRunPendingBackup() async {
+    if (_isBackingUp) return;
+    if (_settings.isBackupPending && GoogleAuthService.isSignedIn) {
+      debugPrint('📋 Backup pendiente detectado, ejecutando...');
+      await performBackup(silent: true);
     }
   }
 

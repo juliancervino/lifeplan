@@ -40,21 +40,14 @@ class BackupSettings extends HiveObject {
     if (!autoBackupEnabled) return false;
     if (lastBackupDate == null) return true;
 
+    final lastBackupDay = DateTime(
+      lastBackupDate!.year,
+      lastBackupDate!.month,
+      lastBackupDate!.day,
+    );
     final now = DateTime.now();
-    final scheduledToday = DateTime(now.year, now.month, now.day, backupHour, backupMinute);
-
-    // Si ya pasó la hora programada y el último backup fue antes de hoy
-    if (now.isAfter(scheduledToday)) {
-      final lastBackupDay = DateTime(
-        lastBackupDate!.year,
-        lastBackupDate!.month,
-        lastBackupDate!.day,
-      );
-      final today = DateTime(now.year, now.month, now.day);
-      return lastBackupDay.isBefore(today);
-    }
-
-    return false;
+    final today = DateTime(now.year, now.month, now.day);
+    return lastBackupDay.isBefore(today);
   }
 
   /// Indica si la cuenta de Google está conectada

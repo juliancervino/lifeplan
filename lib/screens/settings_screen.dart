@@ -167,25 +167,10 @@ class SettingsScreen extends StatelessWidget {
               value: settings.autoBackupEnabled,
               onChanged: (value) => provider.setAutoBackupEnabled(value),
               title: const Text('Activar backup diario'),
-              subtitle: const Text('Se realizará automáticamente al abrir la app'),
+              subtitle: const Text('Se comprobará cada vez que abras la app'),
               contentPadding: EdgeInsets.zero,
             ),
             if (settings.autoBackupEnabled) ...[
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.access_time),
-                title: const Text('Hora del backup'),
-                trailing: Text(
-                  settings.backupTimeFormatted,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
-                  ),
-                ),
-                contentPadding: EdgeInsets.zero,
-                onTap: () => _selectBackupTime(context, provider),
-              ),
               ListTile(
                 leading: const Icon(Icons.storage),
                 title: const Text('Máximo de copias'),
@@ -398,19 +383,6 @@ class SettingsScreen extends StatelessWidget {
   // ──────────────────────────────────────────────
   // Acciones
   // ──────────────────────────────────────────────
-  Future<void> _selectBackupTime(BuildContext context, SettingsProvider provider) async {
-    final settings = provider.settings;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: settings.backupHour, minute: settings.backupMinute),
-      helpText: 'Selecciona la hora del backup diario',
-    );
-
-    if (picked != null) {
-      await provider.setBackupTime(picked.hour, picked.minute);
-    }
-  }
-
   Future<void> _performManualBackup(BuildContext context, SettingsProvider provider) async {
     final success = await provider.performBackup();
 

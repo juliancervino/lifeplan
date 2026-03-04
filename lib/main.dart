@@ -87,6 +87,7 @@ class LifePlanApp extends StatelessWidget {
           },
         ),
         ChangeNotifierProvider(
+          lazy: false,
           create: (context) {
             print('🔧 Creando SettingsProvider...');
             return SettingsProvider();

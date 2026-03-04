@@ -5,6 +5,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../models/goal.dart';
 import '../models/frequency.dart';
 import '../providers/goal_provider.dart';
+import '../providers/settings_provider.dart';
 import 'add_goal_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
@@ -16,7 +17,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late DateTime _selectedDate;
   bool _isCalendarVisible = false;
   Frequency? _selectedFrequency; // null = Todos
@@ -25,6 +26,21 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _selectedDate = _normalizeDate(DateTime.now());
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Al volver a la app, comprobar si hay backup pendiente
+      context.read<SettingsProvider>().checkAndRunPendingBackup();
+    }
   }
 
   DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -138,13 +154,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (context) => const StatsScreen(),
                 ),
               );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Recargar',
-            onPressed: () {
-              context.read<GoalProvider>().loadGoals();
             },
           ),
           PopupMenuButton<String>(
