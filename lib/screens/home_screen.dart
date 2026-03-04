@@ -71,7 +71,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case Frequency.daily:
         if (isSameDay(_selectedDate, now)) return 'Hoy';
         if (isSameDay(_selectedDate, yesterday)) return 'Ayer';
-        return DateFormat('d MMM yyyy', 'es').format(_selectedDate);
+        final formatted = DateFormat('EEEE, d MMM yyyy', 'es').format(_selectedDate);
+        return formatted[0].toUpperCase() + formatted.substring(1);
       case Frequency.weekly:
         final weekStart = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
         final weekEnd = weekStart.add(const Duration(days: 6));
