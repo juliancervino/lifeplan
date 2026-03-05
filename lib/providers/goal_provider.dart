@@ -7,12 +7,13 @@ import '../services/database_service.dart';
 class GoalProvider with ChangeNotifier {
   List<Goal> _goals = [];
   bool _isLoading = false;
+  final DatabaseService _db;
 
   List<Goal> get goals => _goals;
   bool get isLoading => _isLoading;
 
   /// Constructor que carga los objetivos al inicializar
-  GoalProvider() {
+  GoalProvider({DatabaseService? databaseService}) : _db = databaseService ?? DatabaseService() {
     debugPrint('🔧 GoalProvider creado');
     loadGoals();
   }
@@ -23,7 +24,7 @@ class GoalProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _goals = DatabaseService.getAllGoals();
+      _goals = _db.getAllGoalsImpl();
       // Ordenar por orderIndex, luego por fecha de creación como fallback
       _goals.sort((a, b) {
         if (a.orderIndex != b.orderIndex) {
@@ -62,7 +63,7 @@ class GoalProvider with ChangeNotifier {
         g.orderIndex++;
         g.save();
       }
-      await DatabaseService.addGoal(goal);
+      await _db.addGoalImpl(goal);
       _goals.insert(0, goal); // Agregar al inicio de la lista
       notifyListeners();
     } catch (e) {
@@ -74,7 +75,7 @@ class GoalProvider with ChangeNotifier {
   /// Actualiza un objetivo existente
   Future<void> updateGoal(Goal goal) async {
     try {
-      await DatabaseService.updateGoal(goal);
+      await _db.updateGoalImpl(goal);
       final index = _goals.indexWhere((g) => g.id == goal.id);
       if (index != -1) {
         _goals[index] = goal;
@@ -112,7 +113,7 @@ class GoalProvider with ChangeNotifier {
   /// Elimina un objetivo
   Future<void> deleteGoal(String goalId) async {
     try {
-      await DatabaseService.deleteGoal(goalId);
+      await _db.deleteGoalImpl(goalId);
       _goals.removeWhere((g) => g.id == goalId);
       notifyListeners();
     } catch (e) {
