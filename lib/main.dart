@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -16,8 +17,8 @@ void main() async {
   // Captura errores globales
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    print('❌ Flutter Error: ${details.exception}');
-    print('Stack trace: ${details.stack}');
+    debugPrint('❌ Flutter Error: ${details.exception}');
+    debugPrint('Stack trace: ${details.stack}');
   };
 
   // Manejo de errores durante la inicialización
@@ -25,11 +26,11 @@ void main() async {
   try {
     // Inicializa la base de datos Hive
     await DatabaseService.initialize();
-    print('✅ Base de datos inicializada correctamente');
+    debugPrint('✅ Base de datos inicializada correctamente');
   } catch (e, stackTrace) {
     initError = e.toString();
-    print('❌ Error inicializando base de datos: $e');
-    print('Stack trace: $stackTrace');
+    debugPrint('❌ Error inicializando base de datos: $e');
+    debugPrint('Stack trace: $stackTrace');
   }
 
   runApp(LifePlanApp(initError: initError));
@@ -76,20 +77,20 @@ class LifePlanApp extends StatelessWidget {
     }
 
     // Widget de prueba simple para verificar que Flutter renderiza
-    print('🎨 Construyendo LifePlanApp...');
+    debugPrint('🎨 Construyendo LifePlanApp...');
     
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
           create: (context) {
-            print('🔧 Creando GoalProvider...');
+            debugPrint('🔧 Creando GoalProvider...');
             return GoalProvider();
           },
         ),
         ChangeNotifierProvider(
           lazy: false,
           create: (context) {
-            print('🔧 Creando SettingsProvider...');
+            debugPrint('🔧 Creando SettingsProvider...');
             return SettingsProvider();
           },
         ),
@@ -121,7 +122,7 @@ class LifePlanApp extends StatelessWidget {
         ),
         home: Builder(
           builder: (context) {
-            print('🏠 Construyendo HomeScreen...');
+            debugPrint('🏠 Construyendo HomeScreen...');
             return const HomeScreen();
           },
         ),

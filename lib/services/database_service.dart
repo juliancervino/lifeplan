@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/goal.dart';
 import '../models/frequency.dart';
@@ -38,8 +39,8 @@ class DatabaseService {
       _goalsBox = await Hive.openBox<Goal>(_goalsBoxName);
       _isInitialized = true;
     } catch (e, stackTrace) {
-      print('❌ Error inicializando base de datos: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('❌ Error inicializando base de datos: $e');
+      debugPrint('Stack trace: $stackTrace');
       rethrow;
     }
   }

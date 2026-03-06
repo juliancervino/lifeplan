@@ -6,6 +6,7 @@ import '../models/goal.dart';
 import '../models/frequency.dart';
 import '../providers/goal_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/date_utils.dart';
 import 'add_goal_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
@@ -25,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _selectedDate = _normalizeDate(DateTime.now());
+    _selectedDate = AppDateUtils.normalize(DateTime.now());
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -43,10 +44,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
-
   bool get _isToday {
-    final now = _normalizeDate(DateTime.now());
+    final now = AppDateUtils.normalize(DateTime.now());
     switch (_selectedFrequency) {
       case null:
       case Frequency.daily:
@@ -63,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   String _formatSelectedDate() {
-    final now = _normalizeDate(DateTime.now());
+    final now = AppDateUtils.normalize(DateTime.now());
     final yesterday = now.subtract(const Duration(days: 1));
 
     switch (_selectedFrequency) {
@@ -129,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _goToToday() {
     setState(() {
-      _selectedDate = _normalizeDate(DateTime.now());
+      _selectedDate = AppDateUtils.normalize(DateTime.now());
       _isCalendarVisible = false;
     });
   }
@@ -317,7 +316,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onSelected: (selected) {
         setState(() {
           _selectedFrequency = selected ? frequency : null;
-          _selectedDate = _normalizeDate(DateTime.now());
+          _selectedDate = AppDateUtils.normalize(DateTime.now());
           _isCalendarVisible = false;
         });
       },
@@ -428,10 +427,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildCalendarBody(GoalProvider goalProvider) {
-    final now = _normalizeDate(DateTime.now());
+    final now = AppDateUtils.normalize(DateTime.now());
     final earliestGoal = goalProvider.getEarliestCreatedDate();
     final earliest = earliestGoal != null
-        ? _normalizeDate(earliestGoal).subtract(const Duration(days: 365))
+        ? AppDateUtils.normalize(earliestGoal).subtract(const Duration(days: 365))
         : now.subtract(const Duration(days: 730));
 
     return Container(
@@ -497,7 +496,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         onDaySelected: (selectedDay, focusedDay) {
           setState(() {
-            _selectedDate = _normalizeDate(selectedDay);
+            _selectedDate = AppDateUtils.normalize(selectedDay);
             _isCalendarVisible = false;
           });
         },
@@ -518,7 +517,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               day,
               goalProvider,
               isSelected: true,
-              isToday: isSameDay(day, _normalizeDate(DateTime.now())),
+              isToday: isSameDay(day, AppDateUtils.normalize(DateTime.now())),
             );
           },
         ),
@@ -878,7 +877,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // ─── Helpers ─────────────────────────────────────────────────
 
-  IconData _getFrequencyIcon(frequency) {
+  IconData _getFrequencyIcon(Frequency frequency) {
     switch (frequency) {
       case Frequency.daily:
         return Icons.today;
@@ -888,8 +887,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return Icons.calendar_month;
       case Frequency.yearly:
         return Icons.calendar_view_month;
-      default:
-        return Icons.calendar_today;
     }
   }
 

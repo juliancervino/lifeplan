@@ -1,10 +1,8 @@
 import '../models/goal.dart';
 import '../models/frequency.dart';
+import '../utils/date_utils.dart';
 
 class StatsService {
-  /// Normaliza una fecha a medianoche (00:00:00)
-  static DateTime _normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
-
   /// Calcula estadísticas agregadas para un grupo de objetivos de la misma frecuencia.
   ///
   /// Denominador dinámico: para cada objetivo, solo cuenta periodos desde
@@ -15,7 +13,7 @@ class StatsService {
     Frequency frequency, {
     required int days,
   }) {
-    final now = _normalizeDate(DateTime.now());
+    final now = AppDateUtils.normalize(DateTime.now());
     final startDate = now.subtract(Duration(days: days));
 
     if (goals.isEmpty) {
@@ -31,57 +29,31 @@ class StatsService {
     int totalCompleted = 0;
     int totalExpected = 0;
 
+    final periodKeyFn = _periodKeyFnFor(frequency);
+
     for (var goal in goals) {
-      final createdNorm = _normalizeDate(goal.createdDate);
+      final createdNorm = AppDateUtils.normalize(goal.createdDate);
       // fecha_inicio_valida = max(startDate, createdDate)
       final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
 
       // Si el objetivo se creó después de hoy, no cuenta
       if (effectiveStart.isAfter(now)) continue;
 
-      switch (frequency) {
-        case Frequency.daily:
-          for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-            totalExpected++;
-            if (goal.isCompletedOn(d)) totalCompleted++;
-          }
-          break;
-
-        case Frequency.weekly:
-          final weeks = <String>{};
-          final completedWeeks = <String>{};
-          for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-            final wk = _weekKey(d);
-            weeks.add(wk);
-            if (goal.isCompletedOn(d)) completedWeeks.add(wk);
-          }
-          totalExpected += weeks.length;
-          totalCompleted += completedWeeks.length;
-          break;
-
-        case Frequency.monthly:
-          final months = <String>{};
-          final completedMonths = <String>{};
-          for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-            final mk = '${d.year}-${d.month.toString().padLeft(2, '0')}';
-            months.add(mk);
-            if (goal.isCompletedOn(d)) completedMonths.add(mk);
-          }
-          totalExpected += months.length;
-          totalCompleted += completedMonths.length;
-          break;
-
-        case Frequency.yearly:
-          final years = <String>{};
-          final completedYears = <String>{};
-          for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-            final yk = '${d.year}';
-            years.add(yk);
-            if (goal.isCompletedOn(d)) completedYears.add(yk);
-          }
-          totalExpected += years.length;
-          totalCompleted += completedYears.length;
-          break;
+      if (frequency == Frequency.daily) {
+        for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          totalExpected++;
+          if (goal.isCompletedOn(d)) totalCompleted++;
+        }
+      } else {
+        final expectedPeriods = <String>{};
+        final completedPeriods = <String>{};
+        for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+          final key = periodKeyFn(d);
+          expectedPeriods.add(key);
+          if (goal.isCompletedOn(d)) completedPeriods.add(key);
+        }
+        totalExpected += expectedPeriods.length;
+        totalCompleted += completedPeriods.length;
       }
     }
 
@@ -99,82 +71,74 @@ class StatsService {
   }
 
   /// Calcula el porcentaje de cumplimiento de un objetivo en los últimos N días.
-
   ///
   /// Para diarios: días marcados / días esperados.
   /// Para semanales: semanas con al menos 1 marca / semanas en el periodo.
   /// Para mensuales: meses con al menos 1 marca / meses en el periodo.
   /// Para anuales: años con al menos 1 marca / años en el periodo.
   static double calculateCompletionPercentage(Goal goal, {int days = 30}) {
-    final now = _normalizeDate(DateTime.now());
-    final createdNorm = _normalizeDate(goal.createdDate);
+    final now = AppDateUtils.normalize(DateTime.now());
+    final createdNorm = AppDateUtils.normalize(goal.createdDate);
 
-    switch (goal.frequency) {
-      case Frequency.daily:
-        int expected = 0;
-        int completed = 0;
-        for (var i = 0; i < days; i++) {
-          final date = now.subtract(Duration(days: i));
-          if (date.isBefore(createdNorm)) break;
-          expected++;
-          if (goal.isCompletedOn(date)) completed++;
-        }
-        return expected > 0 ? (completed / expected * 100).clamp(0.0, 100.0) : 0.0;
-
-      case Frequency.weekly:
-        final startDate = now.subtract(Duration(days: days));
-        final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
-        if (effectiveStart.isAfter(now)) return 0.0;
-
-        final completedWeeks = <String>{};
-        final expectedWeeks = <String>{};
-        for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-          final wk = _weekKey(d);
-          expectedWeeks.add(wk);
-          if (goal.isCompletedOn(d)) completedWeeks.add(wk);
-        }
-        return expectedWeeks.isNotEmpty
-            ? (completedWeeks.length / expectedWeeks.length * 100).clamp(0.0, 100.0)
-            : 0.0;
-
-      case Frequency.monthly:
-        final startDate = now.subtract(Duration(days: days));
-        final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
-        if (effectiveStart.isAfter(now)) return 0.0;
-
-        final completedMonths = <String>{};
-        final expectedMonths = <String>{};
-        for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-          final mk = '${d.year}-${d.month.toString().padLeft(2, '0')}';
-          expectedMonths.add(mk);
-          if (goal.isCompletedOn(d)) completedMonths.add(mk);
-        }
-        return expectedMonths.isNotEmpty
-            ? (completedMonths.length / expectedMonths.length * 100).clamp(0.0, 100.0)
-            : 0.0;
-
-      case Frequency.yearly:
-        final startDate = now.subtract(Duration(days: days));
-        final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
-        if (effectiveStart.isAfter(now)) return 0.0;
-
-        final completedYears = <String>{};
-        final expectedYears = <String>{};
-        for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
-          final yk = '${d.year}';
-          expectedYears.add(yk);
-          if (goal.isCompletedOn(d)) completedYears.add(yk);
-        }
-        return expectedYears.isNotEmpty
-            ? (completedYears.length / expectedYears.length * 100).clamp(0.0, 100.0)
-            : 0.0;
+    if (goal.frequency == Frequency.daily) {
+      int expected = 0;
+      int completed = 0;
+      for (var i = 0; i < days; i++) {
+        final date = now.subtract(Duration(days: i));
+        if (date.isBefore(createdNorm)) break;
+        expected++;
+        if (goal.isCompletedOn(date)) completed++;
+      }
+      return expected > 0 ? (completed / expected * 100).clamp(0.0, 100.0) : 0.0;
     }
+
+    return _calculatePeriodCompletionPercentage(
+      goal: goal,
+      now: now,
+      createdNorm: createdNorm,
+      days: days,
+      periodKeyFn: _periodKeyFnFor(goal.frequency),
+    );
   }
 
-  /// Clave de semana basada en el lunes de esa semana
-  static String _weekKey(DateTime d) {
-    final monday = d.subtract(Duration(days: d.weekday - 1));
-    return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
+  /// Helper que calcula el porcentaje de cumplimiento por periodos (semanas, meses, años).
+  /// Elimina la duplicación del patrón: iterar día a día, recoger claves de periodo,
+  /// contar periodos completados vs esperados.
+  static double _calculatePeriodCompletionPercentage({
+    required Goal goal,
+    required DateTime now,
+    required DateTime createdNorm,
+    required int days,
+    required String Function(DateTime) periodKeyFn,
+  }) {
+    final startDate = now.subtract(Duration(days: days));
+    final effectiveStart = startDate.isAfter(createdNorm) ? startDate : createdNorm;
+    if (effectiveStart.isAfter(now)) return 0.0;
+
+    final completedPeriods = <String>{};
+    final expectedPeriods = <String>{};
+    for (var d = effectiveStart; !d.isAfter(now); d = d.add(const Duration(days: 1))) {
+      final key = periodKeyFn(d);
+      expectedPeriods.add(key);
+      if (goal.isCompletedOn(d)) completedPeriods.add(key);
+    }
+    return expectedPeriods.isNotEmpty
+        ? (completedPeriods.length / expectedPeriods.length * 100).clamp(0.0, 100.0)
+        : 0.0;
+  }
+
+  /// Retorna la función de clave de periodo adecuada para la frecuencia dada.
+  static String Function(DateTime) _periodKeyFnFor(Frequency frequency) {
+    switch (frequency) {
+      case Frequency.daily:
+        return AppDateUtils.formatKey;
+      case Frequency.weekly:
+        return AppDateUtils.weekKey;
+      case Frequency.monthly:
+        return AppDateUtils.monthKey;
+      case Frequency.yearly:
+        return AppDateUtils.yearKey;
+    }
   }
 
   /// Datos para el gráfico de tendencia global de objetivos diarios.
@@ -186,7 +150,7 @@ class StatsService {
     List<Goal> goals, {
     int days = 30,
   }) {
-    final now = _normalizeDate(DateTime.now());
+    final now = AppDateUtils.normalize(DateTime.now());
     final dailyGoals = goals.where((g) => g.frequency == Frequency.daily).toList();
     final dataPoints = <CompletionDataPoint>[];
 
@@ -197,7 +161,7 @@ class StatsService {
 
       // Solo contar goals que ya existían en esa fecha
       final activeGoals = dailyGoals.where(
-        (g) => !date.isBefore(_normalizeDate(g.createdDate)),
+        (g) => !date.isBefore(AppDateUtils.normalize(g.createdDate)),
       ).toList();
 
       double rate = 0.0;
@@ -269,18 +233,10 @@ class StatsService {
     );
   }
 
-  static double _averageCompletion(List<Goal> goals, {int days = 30}) {
-    if (goals.isEmpty) return 0.0;
-    final total = goals
-        .map((g) => calculateCompletionPercentage(g, days: days))
-        .reduce((a, b) => a + b);
-    return total / goals.length;
-  }
-
   /// Estadísticas generales de un objetivo
   static GoalStats getGoalStats(Goal goal) {
-    final now = _normalizeDate(DateTime.now());
-    final daysActive = now.difference(_normalizeDate(goal.createdDate)).inDays + 1;
+    final now = AppDateUtils.normalize(DateTime.now());
+    final daysActive = now.difference(AppDateUtils.normalize(goal.createdDate)).inDays + 1;
 
     final completedRecords = goal.records.values.where((v) => v).length;
     final totalRecords = goal.records.length;

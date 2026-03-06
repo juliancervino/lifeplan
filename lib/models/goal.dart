@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'frequency.dart';
+import '../utils/date_utils.dart';
 
 part 'goal.g.dart';
 
@@ -38,9 +39,7 @@ class Goal extends HiveObject {
 
   /// Verifica si una fecha (ignorando hora) es anterior a la creación del objetivo
   bool isBeforeCreation(DateTime date) {
-    final dateNorm = DateTime(date.year, date.month, date.day);
-    final createdNorm = DateTime(createdDate.year, createdDate.month, createdDate.day);
-    return dateNorm.isBefore(createdNorm);
+    return AppDateUtils.normalize(date).isBefore(AppDateUtils.normalize(createdDate));
   }
 
   /// Marca el objetivo como cumplido para una fecha específica.
@@ -49,7 +48,7 @@ class Goal extends HiveObject {
     // Guard clause: impedir registro si fecha < createdDate (ignorando hora)
     if (isBeforeCreation(date)) return;
 
-    final dateKey = _formatDate(date);
+    final dateKey = AppDateUtils.formatKey(date);
     
     if (completed) {
       // Marcar como completado
@@ -65,13 +64,12 @@ class Goal extends HiveObject {
           final weekStart = date.subtract(Duration(days: date.weekday - 1));
           for (var i = 0; i < 7; i++) {
             final day = weekStart.add(Duration(days: i));
-            final key = _formatDate(day);
-            records.remove(key);
+            records.remove(AppDateUtils.formatKey(day));
           }
           break;
         case Frequency.monthly:
           // Limpiar todo el mes
-          final monthPrefix = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+          final monthPrefix = AppDateUtils.monthKey(date);
           records.removeWhere((key, value) => key.startsWith(monthPrefix));
           break;
         case Frequency.yearly:
@@ -87,7 +85,7 @@ class Goal extends HiveObject {
 
   /// Verifica si el objetivo fue cumplido en una fecha específica (clave diaria exacta)
   bool isCompletedOn(DateTime date) {
-    final dateKey = _formatDate(date);
+    final dateKey = AppDateUtils.formatKey(date);
     return records[dateKey] ?? false;
   }
 
@@ -108,7 +106,7 @@ class Goal extends HiveObject {
         }
         return false;
       case Frequency.monthly:
-        final monthPrefix = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+        final monthPrefix = AppDateUtils.monthKey(date);
         return records.entries.any((e) => e.key.startsWith(monthPrefix) && e.value);
       case Frequency.yearly:
         final yearPrefix = '${date.year}-';
@@ -170,11 +168,6 @@ class Goal extends HiveObject {
       case Frequency.yearly:
         return DateTime(date.year - 1, date.month, date.day);
     }
-  }
-
-  /// Formatea una fecha como YYYY-MM-DD
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
   /// Crea una copia del Goal con valores actualizados
